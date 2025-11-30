@@ -55,15 +55,12 @@ const AUTOSTOP = {
   ACTION: {
     PLAY: 'play',
     PAUSE: 'pause',
-    MUTE: 'mute',
-    UNMUTE: 'unmute',
     SKIP: 'skip',
     SET_VOLUME: 'setVolume'
   },
 
   // Default settings
   DEFAULT_SETTINGS: {
-    useMute: false,
     whitelist: [],
     // Resume behavior
     resumeDelay: 1500,        // ms to wait before resuming (prevents accidental playback)

@@ -15,9 +15,6 @@ class MediaManager {
     // All known media elements
     this.allMedia = new Map(); // key: `${tabId}-${frameId}-${mediaId}`
 
-    // Tabs muted by this extension (so we don't unmute user-muted tabs)
-    this.mutedByExtension = new Set(); // Set of tabIds
-
     // Resume state management
     this.pendingResume = null;      // { timeoutId, media, fadeInterval }
     this.originalVolumes = new Map(); // mediaId -> original volume (0-1)
@@ -451,14 +448,6 @@ class MediaManager {
       this.pendingResume.media = media;
     }
 
-    // If using mute mode, just unmute (no fade-in for tab mute)
-    if (this.mutedByExtension.has(tabId)) {
-      await this.unmuteTab(tabId);
-      Logger.debug('Resumed by unmuting tab:', tabId);
-      this.pendingResume = null;
-      return;
-    }
-
     const fadeDuration = settings.fadeInDuration;
 
     // If fade-in is disabled (duration = 0), just play normally
@@ -569,19 +558,12 @@ class MediaManager {
   }
 
   /**
-   * Send play command to a media element (or unmute tab in mute mode)
+   * Send play command to a media element
    */
   async playMedia(tabId, frameId, mediaId) {
     const key = this.getMediaKey(tabId, frameId, mediaId);
     if (this.allMedia.has(key)) {
       this.allMedia.get(key).isPlaying = true;
-    }
-
-    // If this tab was muted by us, unmute it
-    if (this.mutedByExtension.has(tabId)) {
-      await this.unmuteTab(tabId);
-      Logger.debug('Resumed by unmuting tab:', tabId);
-      return;
     }
 
     Logger.debug('Sending play command:', mediaId);
@@ -599,7 +581,7 @@ class MediaManager {
   }
 
   /**
-   * Send pause/mute command to a media element
+   * Send pause command to a media element
    */
   async pauseMedia(tabId, frameId, mediaId) {
     const key = this.getMediaKey(tabId, frameId, mediaId);
@@ -607,45 +589,16 @@ class MediaManager {
       this.allMedia.get(key).isPlaying = false;
     }
 
-    const settings = window.storageManager.get();
-
-    if (settings.useMute) {
-      Logger.debug('Muting tab:', tabId);
-      try {
-        await browser.tabs.update(tabId, { muted: true });
-        this.mutedByExtension.add(tabId);
-      } catch (e) {
-        Logger.error('Failed to mute tab:', e.message);
-      }
-    } else {
-      Logger.debug('Sending pause command:', mediaId);
-      try {
-        await browser.tabs.sendMessage(tabId, {
-          type: AUTOSTOP.MSG.CONTROL,
-          action: AUTOSTOP.ACTION.PAUSE,
-          mediaId,
-          frameId
-        });
-      } catch (e) {
-        Logger.error('Failed to pause media:', e.message);
-      }
-    }
-  }
-
-  /**
-   * Unmute a tab (only if we muted it)
-   */
-  async unmuteTab(tabId) {
-    if (this.mutedByExtension.has(tabId)) {
-      Logger.debug('Unmuting tab:', tabId);
-      try {
-        await browser.tabs.update(tabId, { muted: false });
-        this.mutedByExtension.delete(tabId);
-      } catch (e) {
-        Logger.error('Failed to unmute tab:', e.message);
-      }
-    } else {
-      Logger.debug('Tab was not muted by us, skipping unmute:', tabId);
+    Logger.debug('Sending pause command:', mediaId);
+    try {
+      await browser.tabs.sendMessage(tabId, {
+        type: AUTOSTOP.MSG.CONTROL,
+        action: AUTOSTOP.ACTION.PAUSE,
+        mediaId,
+        frameId
+      });
+    } catch (e) {
+      Logger.error('Failed to pause media:', e.message);
     }
   }
 
@@ -755,9 +708,6 @@ class MediaManager {
         this.originalVolumes.delete(media.mediaId);
       }
     }
-
-    // Clean up muted tracking
-    this.mutedByExtension.delete(tabId);
 
     // Remove from paused stack
     const prevLength = this.pausedStack.length;

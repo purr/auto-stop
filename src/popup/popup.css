@@ -210,54 +210,6 @@ body::-webkit-scrollbar-thumb {
   color: var(--text-muted);
 }
 
-/* Pill Toggle */
-.pill-toggle {
-  display: flex;
-  background: var(--bg-tertiary);
-  border-radius: 20px;
-  padding: 3px;
-  gap: 3px;
-}
-
-.pill-option {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 8px 12px;
-  border: none;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 500;
-  border-radius: 17px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.pill-option:hover {
-  color: var(--text-secondary);
-}
-
-.pill-option.active {
-  background: var(--accent-primary);
-  color: var(--bg-primary);
-  box-shadow: 0 2px 8px rgba(196, 167, 231, 0.3);
-}
-
-.pill-option svg {
-  width: 14px;
-  height: 14px;
-}
-
-.setting-mode-hint {
-  font-size: 10px;
-  color: var(--text-muted);
-  font-style: italic;
-  margin-top: var(--spacing-xs);
-}
-
 /* Setting rows with inputs */
 .setting-row {
   display: flex;

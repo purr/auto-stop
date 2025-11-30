@@ -6,7 +6,6 @@ class BaseAdapter {
     this.name = 'base';
     this.mediaElements = new Map(); // mediaId -> { element, info }
     this.pausedByExtension = new Set();
-    this.mutedByExtension = new Set();
     this.mediaIdCounter = 0;
   }
 
@@ -247,30 +246,6 @@ class BaseAdapter {
   }
 
   /**
-   * Handle mute action
-   * @param {string} mediaId
-   */
-  mute(mediaId) {
-    const stored = this.mediaElements.get(mediaId);
-    if (stored?.element) {
-      this.mutedByExtension.add(mediaId);
-      stored.element.muted = true;
-    }
-  }
-
-  /**
-   * Handle unmute action
-   * @param {string} mediaId
-   */
-  unmute(mediaId) {
-    const stored = this.mediaElements.get(mediaId);
-    if (stored?.element) {
-      this.mutedByExtension.delete(mediaId);
-      stored.element.muted = false;
-    }
-  }
-
-  /**
    * Handle set volume action
    * @param {string} mediaId
    * @param {number} volume - 0 to 1
@@ -318,7 +293,6 @@ class BaseAdapter {
    */
   clearPausedFlag(mediaId) {
     this.pausedByExtension.delete(mediaId);
-    this.mutedByExtension.delete(mediaId);
   }
 
   /**

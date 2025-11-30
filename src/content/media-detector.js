@@ -35,14 +35,6 @@ class MediaDetector {
         this.adapter.pause(mediaId);
         break;
 
-      case AUTOSTOP.ACTION.MUTE:
-        this.adapter.mute(mediaId);
-        break;
-
-      case AUTOSTOP.ACTION.UNMUTE:
-        this.adapter.unmute(mediaId);
-        break;
-
       case AUTOSTOP.ACTION.SKIP:
         this.adapter.skip(mediaId);
         break;

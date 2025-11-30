@@ -160,15 +160,6 @@ class GenericAdapter extends BaseAdapter {
       this.sendMessage(AUTOSTOP.MSG.MEDIA_ENDED, { mediaId });
     });
 
-    element.addEventListener('volumechange', () => {
-      if (!element.muted && this.mutedByExtension.has(mediaId)) {
-        this.mutedByExtension.delete(mediaId);
-        if (!element.paused) {
-          this.notifyPlay(element, mediaId);
-        }
-      }
-    });
-
     // Update info on metadata load
     element.addEventListener('loadedmetadata', () => {
       const stored = this.mediaElements.get(mediaId);

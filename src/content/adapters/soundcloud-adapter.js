@@ -356,26 +356,6 @@ class SoundCloudAdapter extends BaseAdapter {
     }
   }
 
-  mute(mediaId) {
-    Logger.debug('SoundCloud: Mute command');
-    this.mutedByExtension.add(mediaId);
-    const volumeBtn = document.querySelector('.volume__button') ||
-                      document.querySelector('.playControls__volume button');
-    if (volumeBtn) {
-      volumeBtn.click();
-    }
-  }
-
-  unmute(mediaId) {
-    Logger.debug('SoundCloud: Unmute command');
-    this.mutedByExtension.delete(mediaId);
-    const volumeBtn = document.querySelector('.volume__button') ||
-                      document.querySelector('.playControls__volume button');
-    if (volumeBtn) {
-      volumeBtn.click();
-    }
-  }
-
   setVolume(mediaId, volume) {
     const clampedVolume = Math.max(0, Math.min(1, volume));
     Logger.debug('SoundCloud: Set volume to', (clampedVolume * 100).toFixed(0) + '%');

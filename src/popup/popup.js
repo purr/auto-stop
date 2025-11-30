@@ -7,7 +7,6 @@ class PopupController {
       pausedStack: [],
       allMedia: [],
       settings: {
-        useMute: false,
         whitelist: []
       }
     };
@@ -67,19 +66,6 @@ class PopupController {
       if (!isOpening) {
         this.collapseWhitelist();
       }
-    });
-
-    // Mode toggle (pause/mute)
-    document.querySelectorAll('#modeToggle .pill-option').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const useMute = btn.dataset.value === 'mute';
-        this.updateSettings({ useMute });
-
-        // Update UI
-        document.querySelectorAll('#modeToggle .pill-option').forEach(b => {
-          b.classList.toggle('active', b.dataset.value === btn.dataset.value);
-        });
-      });
     });
 
     // Whitelist expand/collapse
@@ -226,20 +212,6 @@ class PopupController {
 
   renderSettings() {
     const { settings } = this.state;
-
-    // Mode toggle
-    document.querySelectorAll('#modeToggle .pill-option').forEach(btn => {
-      const isActive = (btn.dataset.value === 'mute') === settings.useMute;
-      btn.classList.toggle('active', isActive);
-    });
-
-    // Mode hint
-    const modeHint = document.getElementById('modeHint');
-    if (modeHint) {
-      modeHint.textContent = settings.useMute
-        ? '🔇 Mutes the entire tab (like right-click → Mute Tab)'
-        : '⏸️ Pauses the media element directly';
-    }
 
     // Resume behavior settings (only update if not focused to avoid overwriting user input)
     const resumeDelayInput = document.getElementById('resumeDelay');

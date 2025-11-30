@@ -16,8 +16,7 @@ A Firefox extension that ensures only one media plays at a time across all your 
 - **Dynamic Icon**: Shows ▶ (play) when idle, ‖ (pause) when media is playing
 - **Now Playing & Paused Stack**: See active media and paused media with cover art, titles, and controls
 - **Click to Focus**: Click on any media card to switch to that tab
-- **Pause vs Mute**: Choose whether to pause or mute the entire tab
-- **Whitelist**: Mark domains that should never be paused (priority playback)
+- **Whitelist**: Mark domains that should never be paused (supports wildcards: `*.example.com`)
 - **Play/Pause/Skip Controls**: Control media directly from the popup
 - **Resume Delay**: Configurable delay before resuming paused media (prevents accidental playback during loading)
 - **Fade-In**: Smooth volume fade-in when resuming media (no sudden loud audio)
@@ -62,11 +61,7 @@ Since this extension is not yet published on Firefox Add-ons, you can load it te
 
 Click the ⚙️ icon in the popup to access settings:
 
-- **Control Mode**: Toggle between "Pause" and "Mute Tab" modes
-  - **Pause**: Completely pauses the media element (recommended)
-  - **Mute Tab**: Mutes the entire tab (like right-click → Mute Tab)
-
-- **Resume Behavior**:
+- **Resume Effects**:
   - **Resume Delay**: Wait X milliseconds before resuming paused media (default: 1500ms)
     - Prevents accidental playback when videos are loading/buffering
     - During the delay, the pending media shows in "Now Playing" with a visual indicator
@@ -74,15 +69,17 @@ Click the ⚙️ icon in the popup to access settings:
     - Set to 0 to skip fade-in entirely
     - Avoids sudden loud audio when resuming
   - **Start Volume**: Initial volume when fading in (default: 20%)
+
+- **Auto-Resume Rules**:
   - **Resume on Manual Pause**: Whether to auto-resume other media when you manually pause current media
     - Enabled: Pausing YouTube will resume your music
     - Disabled: Manual pause = nothing resumes automatically
-
-- **Auto-Expire**: If you watch new media for longer than X seconds, old media won't auto-resume
-  - Set to 0 to disable (always resume)
-  - Example: Set to 120 → if you watch a video for 2+ minutes, your music won't auto-resume
+  - **Auto-Expire**: If you watch new media for longer than X seconds, old media won't auto-resume
+    - Set to 0 to disable (always resume)
+    - Example: Set to 120 → if you watch a video for 2+ minutes, your music won't auto-resume
 
 - **Whitelist**: Add domains that should never be paused
+  - Supports wildcards: `*.example.com` matches all subdomains
   - Example: `spotify.com` - Spotify will always keep playing even if you start media elsewhere
   - Whitelisted media doesn't appear in the popup at all
 
@@ -194,6 +191,12 @@ Add a configurable delay before *pausing* other media when new media starts. Thi
 - Playback history
 - Ignore media below a certain volume threshold
 - Ignore short media (< X seconds)
+
+## 🗑️ Removed Features
+
+Features that were removed from the extension:
+
+- **Mute Tab Mode**: Originally allowed muting the entire tab instead of pausing media. Removed in favor of always using direct media pause which provides better control and a smoother experience.
 
 ## 📄 License
 
