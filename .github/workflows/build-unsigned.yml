@@ -1,0 +1,57 @@
+name: Build Unsigned Extension
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install web-ext
+        run: npm install -g web-ext
+
+      - name: Get version from manifest
+        id: get_version
+        run: |
+          VERSION=$(jq -r '.version' src/manifest.json)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "📦 Building version: $VERSION"
+
+      - name: Lint extension
+        run: web-ext lint --source-dir=src
+
+      - name: Build extension
+        run: |
+          web-ext build --source-dir=src --artifacts-dir=./build --overwrite-dest
+
+          # Rename .zip to .xpi
+          cd build
+          for f in *.zip; do
+            mv "$f" "${f%.zip}.xpi"
+          done
+
+          echo ""
+          echo "✅ Built extension:"
+          ls -la
+
+      - name: Upload XPI
+        uses: actions/upload-artifact@v4
+        with:
+          name: auto-stop-media-${{ steps.get_version.outputs.version }}-unsigned
+          path: build/*.xpi
+          if-no-files-found: error
+

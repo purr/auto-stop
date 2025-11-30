@@ -197,21 +197,29 @@ Add a configurable delay before *pausing* other media when new media starts. Thi
 
 ## 🔨 Building & Signing
 
-### Automatic (GitHub Actions)
+### GitHub Actions (Recommended)
 
-The repository includes a GitHub workflow that automatically builds and signs the extension.
+The repository includes a GitHub workflow that builds and signs the extension automatically.
 
-**Setup:**
-1. Get your API credentials from [Mozilla Add-ons](https://addons.mozilla.org/developers/addon/api/key/)
-2. Add these secrets to your GitHub repository (Settings → Secrets → Actions):
-   - `AMO_JWT_ISSUER` - Your JWT issuer key
-   - `AMO_JWT_SECRET` - Your JWT secret key
+**One-time setup:**
 
-**Trigger a build:**
-- Push a tag: `git tag v1.0.0 && git push --tags`
-- Or run manually from Actions tab → "Build and Sign Firefox Extension" → "Run workflow"
+1. **Get Mozilla API keys:**
+   - Go to https://addons.mozilla.org/developers/addon/api/key/
+   - Log in with your Firefox account
+   - Copy both the **JWT issuer** and **JWT secret**
 
-The signed `.xpi` file will be available in the release or as a workflow artifact.
+2. **Add secrets to GitHub:**
+   - Go to your repository on GitHub
+   - Click **Settings** → **Secrets and variables** → **Actions**
+   - Click **New repository secret**
+   - Add `AMO_JWT_ISSUER` with your JWT issuer value
+   - Add `AMO_JWT_SECRET` with your JWT secret value
+
+**Build the extension:**
+- Push a version tag: `git tag v1.0.0 && git push --tags`
+- Or: **Actions** tab → **Build and Sign Firefox Extension** → **Run workflow**
+
+The signed `.xpi` file will be available as a download in the workflow run or GitHub Release.
 
 ### Manual Build
 
@@ -219,15 +227,15 @@ The signed `.xpi` file will be available in the release or as a workflow artifac
 # Install web-ext
 npm install -g web-ext
 
-# Lint the extension
-web-ext lint --source-dir=src
+# Sign with Mozilla
+web-ext sign --source-dir=src --channel=unlisted
 
-# Build unsigned zip
-web-ext build --source-dir=src
-
-# Sign with Mozilla (requires API credentials)
-web-ext sign --source-dir=src --api-key=YOUR_KEY --api-secret=YOUR_SECRET --channel=unlisted
+# The signed .xpi will be in ./web-ext-artifacts/
 ```
+
+Set these environment variables or pass as flags:
+- `WEB_EXT_API_KEY` or `--api-key` - Your JWT issuer
+- `WEB_EXT_API_SECRET` or `--api-secret` - Your JWT secret
 
 ## 🗑️ Removed Features
 

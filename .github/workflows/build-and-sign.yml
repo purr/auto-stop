@@ -5,17 +5,33 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version to build (leave empty to use manifest version)'
-        required: false
-        default: ''
+
+# REQUIRED SECRETS (add in GitHub repo Settings → Secrets and variables → Actions):
+# - AMO_JWT_ISSUER: Get from https://addons.mozilla.org/developers/addon/api/key/
+# - AMO_JWT_SECRET: Get from https://addons.mozilla.org/developers/addon/api/key/
 
 jobs:
   build-and-sign:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Check secrets are configured
+        run: |
+          if [ -z "${{ secrets.AMO_JWT_ISSUER }}" ] || [ -z "${{ secrets.AMO_JWT_SECRET }}" ]; then
+            echo "❌ ERROR: Missing required secrets!"
+            echo ""
+            echo "Go to your GitHub repository:"
+            echo "  Settings → Secrets and variables → Actions → New repository secret"
+            echo ""
+            echo "Add these two secrets:"
+            echo "  1. AMO_JWT_ISSUER"
+            echo "  2. AMO_JWT_SECRET"
+            echo ""
+            echo "Get your API keys from: https://addons.mozilla.org/developers/addon/api/key/"
+            exit 1
+          fi
+          echo "✅ Secrets configured"
+
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -32,56 +48,47 @@ jobs:
         run: |
           VERSION=$(jq -r '.version' src/manifest.json)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Building version: $VERSION"
+          echo "📦 Building version: $VERSION"
 
       - name: Lint extension
         run: web-ext lint --source-dir=src
 
-      - name: Build unsigned extension
-        run: |
-          web-ext build --source-dir=src --artifacts-dir=./artifacts --overwrite-dest
-          echo "Built unsigned extension:"
-          ls -la artifacts/
-
       - name: Sign extension with Mozilla
-        if: ${{ env.AMO_JWT_ISSUER != '' && env.AMO_JWT_SECRET != '' }}
         env:
-          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
-          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+          WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
+          WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
         run: |
+          echo "🔐 Signing extension with Mozilla..."
           web-ext sign \
             --source-dir=src \
-            --artifacts-dir=./artifacts-signed \
-            --api-key=$AMO_JWT_ISSUER \
-            --api-secret=$AMO_JWT_SECRET \
+            --artifacts-dir=./signed \
             --channel=unlisted
-          echo "Signed extension:"
-          ls -la artifacts-signed/
 
-      - name: Upload unsigned artifact
+          echo ""
+          echo "✅ Signed extension files:"
+          ls -la signed/
+
+      - name: Upload signed XPI
         uses: actions/upload-artifact@v4
         with:
-          name: auto-stop-media-unsigned-${{ steps.get_version.outputs.version }}
-          path: artifacts/*.zip
-
-      - name: Upload signed artifact
-        if: ${{ env.AMO_JWT_ISSUER != '' && env.AMO_JWT_SECRET != '' }}
-        uses: actions/upload-artifact@v4
-        env:
-          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
-          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
-        with:
-          name: auto-stop-media-signed-${{ steps.get_version.outputs.version }}
-          path: artifacts-signed/*.xpi
+          name: auto-stop-media-${{ steps.get_version.outputs.version }}-signed
+          path: signed/*.xpi
+          if-no-files-found: error
 
       - name: Create Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
         with:
-          files: |
-            artifacts/*.zip
-            artifacts-signed/*.xpi
+          files: signed/*.xpi
           generate_release_notes: true
+          body: |
+            ## Installation
+
+            1. Download the `.xpi` file below
+            2. Open Firefox and drag the file into the browser
+            3. Click "Add" when prompted
+
+            The extension is now permanently installed!
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
