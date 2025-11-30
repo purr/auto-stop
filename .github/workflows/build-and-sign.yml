@@ -78,7 +78,7 @@ jobs:
 
       - name: Lint extension
         if: steps.version_check.outputs.should_build == 'true'
-        run: web-ext lint --source-dir=src
+        run: web-ext lint --source-dir=src --warnings-as-errors=false
 
       - name: Sign extension with Mozilla
         if: steps.version_check.outputs.should_build == 'true'

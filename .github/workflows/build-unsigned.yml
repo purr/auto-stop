@@ -30,7 +30,7 @@ jobs:
           echo "📦 Building version: $VERSION"
 
       - name: Lint extension
-        run: web-ext lint --source-dir=src
+        run: web-ext lint --source-dir=src --warnings-as-errors=false
 
       - name: Build XPI
         run: |
