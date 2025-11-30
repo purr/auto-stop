@@ -2,6 +2,12 @@ name: Build and Sign Firefox Extension
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'src/manifest.json'
 
 permissions:
   contents: write
@@ -15,7 +21,35 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check if version was bumped
+        id: version_check
+        run: |
+          # Get current version
+          CURRENT_VERSION=$(jq -r '.version' src/manifest.json)
+          echo "Current version: $CURRENT_VERSION"
+
+          # Get previous version (from previous commit)
+          git show HEAD~1:src/manifest.json > /tmp/old_manifest.json 2>/dev/null || echo '{"version":"0.0.0"}' > /tmp/old_manifest.json
+          PREVIOUS_VERSION=$(jq -r '.version' /tmp/old_manifest.json)
+          echo "Previous version: $PREVIOUS_VERSION"
+
+          # Check if version changed OR if manually triggered
+          if [ "$CURRENT_VERSION" != "$PREVIOUS_VERSION" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "✅ Building version $CURRENT_VERSION"
+            echo "should_build=true" >> $GITHUB_OUTPUT
+            echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "⏭️ Version unchanged ($CURRENT_VERSION), skipping build"
+            echo "should_build=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Check secrets are configured
+        if: steps.version_check.outputs.should_build == 'true'
         run: |
           if [ -z "${{ secrets.AMO_JWT_ISSUER }}" ] || [ -z "${{ secrets.AMO_JWT_SECRET }}" ]; then
             echo "❌ ERROR: Missing required secrets!"
@@ -32,28 +66,22 @@ jobs:
           fi
           echo "✅ Secrets configured"
 
-      - name: Checkout code
-        uses: actions/checkout@v4
-
       - name: Setup Node.js
+        if: steps.version_check.outputs.should_build == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - name: Install web-ext
+        if: steps.version_check.outputs.should_build == 'true'
         run: npm install -g web-ext
 
-      - name: Get version from manifest
-        id: get_version
-        run: |
-          VERSION=$(jq -r '.version' src/manifest.json)
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "📦 Building version: $VERSION"
-
       - name: Lint extension
+        if: steps.version_check.outputs.should_build == 'true'
         run: web-ext lint --source-dir=src
 
       - name: Sign extension with Mozilla
+        if: steps.version_check.outputs.should_build == 'true'
         env:
           WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
           WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
@@ -69,10 +97,11 @@ jobs:
           ls -la signed/
 
       - name: Create Release
+        if: steps.version_check.outputs.should_build == 'true'
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v${{ steps.get_version.outputs.version }}
-          name: v${{ steps.get_version.outputs.version }}
+          tag_name: v${{ steps.version_check.outputs.version }}
+          name: v${{ steps.version_check.outputs.version }}
           files: signed/*.xpi
           body: |
             ## Installation
@@ -84,4 +113,3 @@ jobs:
             ✅ This extension is **signed** and works in regular Firefox!
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
