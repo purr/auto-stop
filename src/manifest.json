@@ -1,0 +1,54 @@
+{
+  "manifest_version": 2,
+  "name": "Auto-Stop Media",
+  "version": "1.0.0",
+  "description": "Automatically pause media in other tabs when new media starts playing. Only one media plays at a time.",
+  "author": "You",
+  "homepage_url": "https://github.com/yourusername/auto-stop",
+
+  "permissions": [
+    "tabs",
+    "activeTab",
+    "storage",
+    "<all_urls>"
+  ],
+
+  "background": {
+    "scripts": [
+      "shared/constants.js",
+      "background/storage.js",
+      "background/media-manager.js",
+      "background/index.js"
+    ],
+    "persistent": true
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": [
+        "shared/constants.js",
+        "content/adapters/base-adapter.js",
+        "content/adapters/generic-adapter.js",
+        "content/adapters/soundcloud-adapter.js",
+        "content/adapters/index.js",
+        "content/media-detector.js",
+        "content/index.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ],
+
+  "browser_action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": "icons/icon-idle.svg",
+    "default_title": "Auto-Stop Media - No media playing"
+  },
+
+  "icons": {
+    "48": "icons/icon-idle.svg",
+    "96": "icons/icon-idle.svg"
+  }
+}
+
