@@ -91,6 +91,12 @@ class PopupController {
       }
     });
 
+    document.getElementById('activePrevBtn').addEventListener('click', () => {
+      if (this.state.activeMedia) {
+        this.controlMedia(this.state.activeMedia, 'prev');
+      }
+    });
+
     // Resume behavior settings (number inputs)
     const settingsInputs = ['resumeDelay', 'fadeInDuration', 'fadeInStartVolume', 'autoExpireSeconds'];
     settingsInputs.forEach(id => {
@@ -244,29 +250,53 @@ class PopupController {
     const BlacklistCount = document.getElementById('BlacklistCount');
     BlacklistCount.textContent = settings.Blacklist.length;
 
-    // Blacklist items
+    // Blacklist items - use DOM manipulation instead of innerHTML
     const BlacklistContainer = document.getElementById('BlacklistItems');
-    BlacklistContainer.innerHTML = settings.Blacklist.length === 0
-      ? '<li class="Blacklist-empty">No domains added</li>'
-      : settings.Blacklist.map(domain => `
-        <li class="Blacklist-item">
-          <span class="domain-name" title="${this.escapeHtml(domain)}">${this.escapeHtml(domain)}</span>
-          <button class="remove-btn" data-domain="${this.escapeHtml(domain)}" title="Remove">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="18" y1="6" x2="6" y2="18"/>
-              <line x1="6" y1="6" x2="18" y2="18"/>
-            </svg>
-          </button>
-        </li>
-      `).join('');
+    BlacklistContainer.textContent = '';
 
-    // Add remove handlers
-    BlacklistContainer.querySelectorAll('.remove-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this.removeBlacklistDomain(btn.dataset.domain);
+    if (settings.Blacklist.length === 0) {
+      const emptyLi = document.createElement('li');
+      emptyLi.className = 'Blacklist-empty';
+      emptyLi.textContent = 'No domains added';
+      BlacklistContainer.appendChild(emptyLi);
+    } else {
+      settings.Blacklist.forEach(domain => {
+        const li = document.createElement('li');
+        li.className = 'Blacklist-item';
+
+        const span = document.createElement('span');
+        span.className = 'domain-name';
+        span.title = domain;
+        span.textContent = domain;
+
+        const btn = document.createElement('button');
+        btn.className = 'remove-btn';
+        btn.title = 'Remove';
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.removeBlacklistDomain(domain);
+        });
+
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('viewBox', '0 0 24 24');
+        svg.setAttribute('fill', 'none');
+        svg.setAttribute('stroke', 'currentColor');
+        svg.setAttribute('stroke-width', '2');
+        const line1 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line1.setAttribute('x1', '18'); line1.setAttribute('y1', '6');
+        line1.setAttribute('x2', '6'); line1.setAttribute('y2', '18');
+        const line2 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line2.setAttribute('x1', '6'); line2.setAttribute('y1', '6');
+        line2.setAttribute('x2', '18'); line2.setAttribute('y2', '18');
+        svg.appendChild(line1);
+        svg.appendChild(line2);
+        btn.appendChild(svg);
+
+        li.appendChild(span);
+        li.appendChild(btn);
+        BlacklistContainer.appendChild(li);
       });
-    });
+    }
   }
 
   renderActiveMedia() {
@@ -315,16 +345,23 @@ class PopupController {
     // Determine if actually playing
     const isPlaying = isPending ? false : (mediaInfo?.isPlaying ?? true);
 
-    // Cover
+    // Cover - use DOM manipulation instead of innerHTML
     const coverEl = document.getElementById('activeCover');
+    coverEl.textContent = '';
     if (displayMedia.cover) {
-      coverEl.innerHTML = `<img src="${this.escapeHtml(displayMedia.cover)}" alt="Cover">`;
+      const img = document.createElement('img');
+      img.src = displayMedia.cover;
+      img.alt = 'Cover';
+      coverEl.appendChild(img);
     } else {
-      coverEl.innerHTML = `
-        <svg class="cover-placeholder" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
-        </svg>
-      `;
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.classList.add('cover-placeholder');
+      svg.setAttribute('viewBox', '0 0 24 24');
+      svg.setAttribute('fill', 'currentColor');
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', 'M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z');
+      svg.appendChild(path);
+      coverEl.appendChild(svg);
     }
 
     // Type badge - show "RESUMING" or "FADING IN" when pending
@@ -348,7 +385,6 @@ class PopupController {
     } else {
       favicon.classList.remove('visible');
     }
-    document.getElementById('activeSource').textContent = this.getSourceName(displayMedia.url);
 
     // Progress - use actual time from background (updated every 500ms by content script)
     const currentTime = displayMedia.currentTime || 0;
@@ -386,9 +422,11 @@ class PopupController {
       }
     };
 
-    // Skip button - disabled for pending media
+    // Skip and Prev buttons - only disabled for pending media
     const skipBtn = document.getElementById('activeSkipBtn');
-    skipBtn.disabled = isPending || !(mediaInfo?.hasSkip);
+    const prevBtn = document.getElementById('activePrevBtn');
+    skipBtn.disabled = isPending;
+    prevBtn.disabled = isPending;
 
     // Make the card clickable to focus the tab (but not when clicking controls)
     card.onclick = (e) => {
@@ -417,7 +455,7 @@ class PopupController {
     const wrapper = document.getElementById('pausedListWrapper');
 
     if (filteredStack.length === 0) {
-      list.innerHTML = '';
+      list.textContent = '';
       emptyState.classList.remove('hidden');
       wrapper.classList.add('hidden');
       wrapper.classList.remove('can-scroll-up', 'can-scroll-down');
@@ -442,21 +480,11 @@ class PopupController {
     this.prevPausedStackState = currentState;
     this.prevPausedStackIds = filteredStack.map(m => m.mediaId);
 
-    // Paused stack items should show PLAY button (to resume)
-    list.innerHTML = filteredStack.map(media => this.renderMediaListItem(media)).join('');
-
-    // Add click handlers
-    list.querySelectorAll('.media-list-item').forEach((item, index) => {
-      const media = filteredStack[index];
-
-      item.querySelector('.play-btn')?.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this.controlMedia(media, 'play');
-      });
-
-      item.addEventListener('click', () => {
-        this.focusTab(media.tabId);
-      });
+    // Paused stack items - use DOM manipulation instead of innerHTML
+    list.textContent = '';
+    filteredStack.forEach(media => {
+      const item = this.createMediaListItem(media);
+      list.appendChild(item);
     });
 
     // Update scroll shadows
@@ -486,36 +514,89 @@ class PopupController {
     list.addEventListener('scroll', this._scrollHandler);
   }
 
-  renderMediaListItem(media) {
-    const coverHtml = media.cover
-      ? `<img src="${this.escapeHtml(media.cover)}" alt="Cover">`
-      : `<svg viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
-         </svg>`;
+  createMediaListItem(media) {
+    const item = document.createElement('div');
+    item.className = `media-list-item ${media.manuallyPaused ? 'manually-paused' : ''}`;
+    item.dataset.mediaId = media.mediaId;
 
-    // Badge for manually paused (won't auto-resume)
-    const manualBadge = media.manuallyPaused
-      ? `<span class="manual-badge" title="Manually paused - won't auto-resume">⏸</span>`
-      : '';
+    // Status dot
+    const statusDot = document.createElement('div');
+    statusDot.className = `status-dot ${media.manuallyPaused ? 'manual' : 'paused'}`;
+    item.appendChild(statusDot);
 
-    return `
-      <div class="media-list-item ${media.manuallyPaused ? 'manually-paused' : ''}" data-media-id="${this.escapeHtml(media.mediaId)}">
-        <div class="status-dot ${media.manuallyPaused ? 'manual' : 'paused'}"></div>
-        <div class="mini-cover">${coverHtml}</div>
-        <div class="item-info">
-          <div class="item-title">${this.escapeHtml(media.title || 'Unknown')}${manualBadge}</div>
-          <div class="item-source">
-            ${media.favicon ? `<img src="${this.escapeHtml(media.favicon)}" alt="">` : ''}
-            <span>${this.getSourceName(media.url)}</span>
-          </div>
-        </div>
-        <button class="play-btn" title="${media.manuallyPaused ? 'Resume (clears manual pause)' : 'Resume'}">
-          <svg viewBox="0 0 24 24" fill="currentColor">
-            <polygon points="5,3 19,12 5,21"/>
-          </svg>
-        </button>
-      </div>
-    `;
+    // Mini cover
+    const miniCover = document.createElement('div');
+    miniCover.className = 'mini-cover';
+    if (media.cover) {
+      const img = document.createElement('img');
+      img.src = media.cover;
+      img.alt = 'Cover';
+      miniCover.appendChild(img);
+    } else {
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('viewBox', '0 0 24 24');
+      svg.setAttribute('fill', 'currentColor');
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', 'M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z');
+      svg.appendChild(path);
+      miniCover.appendChild(svg);
+    }
+    item.appendChild(miniCover);
+
+    // Item info
+    const itemInfo = document.createElement('div');
+    itemInfo.className = 'item-info';
+
+    const itemTitle = document.createElement('div');
+    itemTitle.className = 'item-title';
+    itemTitle.textContent = media.title || 'Unknown';
+    if (media.manuallyPaused) {
+      const badge = document.createElement('span');
+      badge.className = 'manual-badge';
+      badge.title = "Manually paused - won't auto-resume";
+      badge.textContent = '⏸';
+      itemTitle.appendChild(badge);
+    }
+    itemInfo.appendChild(itemTitle);
+
+    const itemSource = document.createElement('div');
+    itemSource.className = 'item-source';
+    if (media.favicon) {
+      const favicon = document.createElement('img');
+      favicon.src = media.favicon;
+      favicon.alt = '';
+      itemSource.appendChild(favicon);
+    }
+    const sourceSpan = document.createElement('span');
+    sourceSpan.textContent = this.getSourceName(media.url);
+    itemSource.appendChild(sourceSpan);
+    itemInfo.appendChild(itemSource);
+
+    item.appendChild(itemInfo);
+
+    // Play button
+    const playBtn = document.createElement('button');
+    playBtn.className = 'play-btn';
+    playBtn.title = media.manuallyPaused ? 'Resume (clears manual pause)' : 'Resume';
+    const playSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    playSvg.setAttribute('viewBox', '0 0 24 24');
+    playSvg.setAttribute('fill', 'currentColor');
+    const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    polygon.setAttribute('points', '5,3 19,12 5,21');
+    playSvg.appendChild(polygon);
+    playBtn.appendChild(playSvg);
+    playBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.controlMedia(media, 'play');
+    });
+    item.appendChild(playBtn);
+
+    // Click to focus tab
+    item.addEventListener('click', () => {
+      this.focusTab(media.tabId);
+    });
+
+    return item;
   }
 
   async focusTab(tabId) {

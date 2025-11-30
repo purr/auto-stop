@@ -682,6 +682,13 @@ class MediaManager {
           mediaId,
           frameId
         });
+      } else if (action === AUTOSTOP.ACTION.PREV) {
+        await browser.tabs.sendMessage(tabId, {
+          type: AUTOSTOP.MSG.CONTROL,
+          action: AUTOSTOP.ACTION.PREV,
+          mediaId,
+          frameId
+        });
       }
     } catch (e) {
       Logger.error('Failed to control media:', e.message);

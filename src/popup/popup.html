@@ -121,46 +121,55 @@
         <span id="nowPlayingLabel">Now Playing</span>
       </div>
       <div class="media-card active" id="activeMediaCard">
+        <!-- Left: Cover with favicon overlay -->
         <div class="media-cover-container">
           <div class="media-cover" id="activeCover">
             <svg class="cover-placeholder" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
             </svg>
           </div>
+          <img class="favicon-overlay" id="activeFavicon" src="" alt="">
           <div class="media-type-badge" id="activeTypeBadge">VIDEO</div>
         </div>
+
+        <!-- Right: Info stacked vertically -->
         <div class="media-info">
+          <!-- Title -->
           <div class="media-title" id="activeTitle">No media playing</div>
-          <div class="media-source">
-            <img class="favicon" id="activeFavicon" src="" alt="">
-            <span id="activeSource">-</span>
-          </div>
+
+          <!-- Progress -->
           <div class="media-progress">
+            <span class="progress-time-current" id="activeCurrentTime">0:00</span>
             <div class="progress-bar">
               <div class="progress-fill" id="activeProgress"></div>
             </div>
-            <div class="progress-time">
-              <span id="activeCurrentTime">0:00</span>
-              <span id="activeDuration">0:00</span>
-            </div>
+            <span class="progress-time-duration" id="activeDuration">0:00</span>
           </div>
-        </div>
-        <div class="media-controls">
-          <button class="control-btn" id="activePlayPauseBtn" title="Play/Pause">
-            <svg class="icon-pause" viewBox="0 0 24 24" fill="currentColor">
-              <rect x="6" y="4" width="4" height="16" rx="1"/>
-              <rect x="14" y="4" width="4" height="16" rx="1"/>
-            </svg>
-            <svg class="icon-play hidden" viewBox="0 0 24 24" fill="currentColor">
-              <polygon points="5,3 19,12 5,21"/>
-            </svg>
-          </button>
-          <button class="control-btn" id="activeSkipBtn" title="Skip" disabled>
-            <svg viewBox="0 0 24 24" fill="currentColor">
-              <polygon points="5,4 15,12 5,20"/>
-              <rect x="15" y="4" width="4" height="16" rx="1"/>
-            </svg>
-          </button>
+
+          <!-- Controls: prev, play/pause, next -->
+          <div class="media-controls">
+            <button class="control-btn" id="activePrevBtn" title="Previous">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <rect x="5" y="4" width="4" height="16" rx="1"/>
+                <polygon points="19,20 9,12 19,4"/>
+              </svg>
+            </button>
+            <button class="control-btn control-btn-main" id="activePlayPauseBtn" title="Play/Pause">
+              <svg class="icon-pause" viewBox="0 0 24 24" fill="currentColor">
+                <rect x="6" y="4" width="4" height="16" rx="1"/>
+                <rect x="14" y="4" width="4" height="16" rx="1"/>
+              </svg>
+              <svg class="icon-play hidden" viewBox="0 0 24 24" fill="currentColor">
+                <polygon points="5,3 19,12 5,21"/>
+              </svg>
+            </button>
+            <button class="control-btn" id="activeSkipBtn" title="Next">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <polygon points="5,4 15,12 5,20"/>
+                <rect x="15" y="4" width="4" height="16" rx="1"/>
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
       <div class="empty-state" id="emptyNowPlaying">

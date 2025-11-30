@@ -271,8 +271,10 @@ class SoundCloudAdapter extends BaseAdapter {
     for (const selector of selectors) {
       try {
         const el = document.querySelector(selector);
-        const text = el?.textContent?.trim();
+        let text = el?.textContent?.trim();
         if (text && text.length > 0) {
+          // Remove "Current track:" prefix if present
+          text = text.replace(/^Current track:\s*/i, '');
           return text.substring(0, 100);
         }
       } catch (e) {}
@@ -328,13 +330,14 @@ class SoundCloudAdapter extends BaseAdapter {
       duration: this.getDuration(),
       currentTime: this.getCurrentTime(),
       isPlaying: this.isPlaying, // Use our tracked state
-      hasSkip: !!this.getNextButton(),
+      hasSkip: true,
       mediaType: 'audio'
     };
   }
 
   hasSkipButton() {
-    return !!this.getNextButton();
+    // Always available - can click next or seek to end
+    return true;
   }
 
   // ===== Controls =====
@@ -402,9 +405,43 @@ class SoundCloudAdapter extends BaseAdapter {
 
   skip(mediaId) {
     Logger.debug('SoundCloud: Skip command');
+
+    // Try SoundCloud's next button first
     const nextBtn = this.getNextButton();
     if (nextBtn) {
       nextBtn.click();
+      return;
+    }
+
+    // Fallback: seek to end of current track
+    const audioElements = document.querySelectorAll('audio');
+    for (const audio of audioElements) {
+      if (!audio.paused && isFinite(audio.duration) && audio.duration > 0) {
+        Logger.debug('SoundCloud: Seeking to end', audio.duration);
+        audio.currentTime = audio.duration;
+        return;
+      }
+    }
+  }
+
+  prev(mediaId) {
+    Logger.debug('SoundCloud: Prev command');
+
+    // Try SoundCloud's prev button first
+    const prevBtn = this.getPrevButton();
+    if (prevBtn) {
+      prevBtn.click();
+      return;
+    }
+
+    // Fallback: seek to start of current track
+    const audioElements = document.querySelectorAll('audio');
+    for (const audio of audioElements) {
+      if (!audio.paused && isFinite(audio.duration) && audio.duration > 0) {
+        Logger.debug('SoundCloud: Seeking to start');
+        audio.currentTime = 0;
+        return;
+      }
     }
   }
 }

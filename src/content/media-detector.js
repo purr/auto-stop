@@ -39,6 +39,10 @@ class MediaDetector {
         this.adapter.skip(mediaId);
         break;
 
+      case AUTOSTOP.ACTION.PREV:
+        this.adapter.prev(mediaId);
+        break;
+
       case AUTOSTOP.ACTION.SET_VOLUME:
         this.adapter.setVolume(mediaId, volume);
         break;

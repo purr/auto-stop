@@ -122,11 +122,11 @@ class BaseAdapter {
   }
 
   /**
-   * Check if page has skip/next button
+   * Check if skip is available (always true - we can seek to end)
    * @returns {boolean}
    */
   hasSkipButton() {
-    return false;
+    return true;
   }
 
   /**
@@ -271,11 +271,53 @@ class BaseAdapter {
   }
 
   /**
-   * Handle skip action
+   * Handle skip action - seeks to end of media
    * @param {string} mediaId
    */
   skip(mediaId) {
-    // Override in subclass
+    const stored = this.mediaElements.get(mediaId);
+    let element = stored?.element;
+
+    // Fallback: find any playing media
+    if (!element) {
+      const allMedia = document.querySelectorAll('video, audio');
+      for (const media of allMedia) {
+        if (!media.paused && media.duration > 0) {
+          element = media;
+          break;
+        }
+      }
+    }
+
+    if (element && isFinite(element.duration) && element.duration > 0) {
+      Logger.debug('Skip: seeking to end', element.duration);
+      element.currentTime = element.duration;
+    }
+  }
+
+  /**
+   * Handle previous action - seeks to start of media
+   * @param {string} mediaId
+   */
+  prev(mediaId) {
+    const stored = this.mediaElements.get(mediaId);
+    let element = stored?.element;
+
+    // Fallback: find any playing media
+    if (!element) {
+      const allMedia = document.querySelectorAll('video, audio');
+      for (const media of allMedia) {
+        if (!media.paused && media.duration > 0) {
+          element = media;
+          break;
+        }
+      }
+    }
+
+    if (element) {
+      Logger.debug('Prev: seeking to start');
+      element.currentTime = 0;
+    }
   }
 
   /**

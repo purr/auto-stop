@@ -56,6 +56,7 @@ const AUTOSTOP = {
     PLAY: 'play',
     PAUSE: 'pause',
     SKIP: 'skip',
+    PREV: 'prev',
     SET_VOLUME: 'setVolume'
   },
 

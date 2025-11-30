@@ -237,47 +237,33 @@ class GenericAdapter extends BaseAdapter {
   }
 
   hasSkipButton() {
-    const selectors = [
-      '[class*="next"]',
-      '[class*="skip"]',
-      '[aria-label*="next" i]',
-      '[aria-label*="skip" i]'
-    ];
-
-    for (const selector of selectors) {
-      try {
-        const btn = document.querySelector(selector);
-        if (btn && !btn.disabled) return true;
-      } catch (e) {}
-    }
-
-    return false;
+    // Skip is always available - we seek to end
+    return true;
   }
 
   skip(mediaId) {
+    // Find the media element
+    let element = null;
     const stored = this.mediaElements.get(mediaId);
 
-    // Try to find and click skip button
-    const selectors = [
-      '.next-button',
-      '.skip-button',
-      '[aria-label="Next"]',
-      '[aria-label="Skip"]'
-    ];
-
-    for (const selector of selectors) {
-      try {
-        const btn = document.querySelector(selector);
-        if (btn && !btn.disabled) {
-          btn.click();
-          return;
+    if (stored?.element) {
+      element = stored.element;
+    } else {
+      // Fallback: find any playing media
+      const allMedia = document.querySelectorAll('video, audio');
+      for (const media of allMedia) {
+        if (!media.paused && media.duration > 0) {
+          element = media;
+          break;
         }
-      } catch (e) {}
+      }
     }
 
-    // Fallback: seek to end
-    if (stored?.element?.duration && isFinite(stored.element.duration)) {
-      stored.element.currentTime = stored.element.duration;
+    if (element && isFinite(element.duration) && element.duration > 0) {
+      Logger.debug('Skip: seeking to end', element.duration);
+      element.currentTime = element.duration;
+    } else {
+      Logger.debug('Skip: no valid media element found');
     }
   }
 }
