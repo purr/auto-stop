@@ -88,10 +88,38 @@ class MediaManager {
   }
 
   /**
+   * Check if a URL/title combo should be ignored (Unknown source)
+   */
+  isUnknownMedia(url, title) {
+    // Get hostname from URL
+    let hostname = 'Unknown';
+    if (url) {
+      try {
+        hostname = new URL(url).hostname.replace(/^www\./, '');
+      } catch {
+        hostname = 'Unknown';
+      }
+    }
+
+    // Ignore if both hostname and title are Unknown
+    const isUnknown = (!hostname || hostname === 'Unknown') &&
+                      (!title || title === 'Unknown' || title === 'Unknown Media');
+
+    return isUnknown;
+  }
+
+  /**
    * Handle media registration
    */
   async handleMediaRegistered(tabId, frameId, data, tab) {
     const url = tab?.url || '';
+    const title = data.title || tab?.title || 'Unknown';
+
+    // Ignore Unknown media completely
+    if (this.isUnknownMedia(url, title)) {
+      Logger.debug('Unknown media registration ignored');
+      return;
+    }
 
     // Don't register Blacklisted media
     if (window.storageManager.isBlacklisted(url)) {
@@ -161,6 +189,13 @@ class MediaManager {
   async handleMediaPlay(tabId, frameId, data, tab) {
     const key = this.getMediaKey(tabId, frameId, data.mediaId);
     const url = tab?.url || '';
+    const title = data.title || tab?.title || 'Unknown';
+
+    // Ignore Unknown media completely
+    if (this.isUnknownMedia(url, title)) {
+      Logger.debug('Unknown media play event ignored');
+      return;
+    }
 
     Logger.media('Play event', { title: data.title, url });
 
