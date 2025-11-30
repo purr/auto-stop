@@ -110,6 +110,33 @@ class GenericAdapter extends BaseAdapter {
     }
   }
 
+  /**
+   * Re-register a media element (override from base for full event setup)
+   * @param {HTMLMediaElement} element
+   */
+  reRegisterElement(element) {
+    // Clean up old registration if exists
+    if (element._autoStopMediaId) {
+      this.mediaElements.delete(element._autoStopMediaId);
+    }
+
+    const mediaId = this.generateMediaId();
+    element._autoStopMediaId = mediaId;
+
+    const info = this.getMediaInfo(element, mediaId);
+    this.mediaElements.set(mediaId, { element, info });
+
+    // Set up event listeners (they stack but that's okay - browser handles it)
+    this.setupEventListeners(element, mediaId);
+
+    // Notify background
+    this.sendMessage(AUTOSTOP.MSG.MEDIA_REGISTERED, info);
+
+    Logger.info('Re-registered generic element with new mediaId:', mediaId);
+
+    return mediaId;
+  }
+
   setupEventListeners(element, mediaId) {
     element.addEventListener('play', () => {
       this.clearPausedFlag(mediaId);

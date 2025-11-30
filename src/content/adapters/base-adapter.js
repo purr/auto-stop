@@ -138,7 +138,70 @@ class BaseAdapter {
     const stored = this.mediaElements.get(mediaId);
     if (stored?.element) {
       stored.element.play().catch(() => {});
+    } else {
+      // Fallback: element not found, try to play any paused media in the page
+      Logger.warn('Element not found for mediaId:', mediaId, '- using fallback');
+      this.playAnyPaused();
     }
+  }
+
+  /**
+   * Fallback: play any paused media element on the page
+   * Also re-registers the element so background gets updated info
+   */
+  playAnyPaused() {
+    const mediaElements = document.querySelectorAll('video, audio');
+    for (const el of mediaElements) {
+      // Skip tiny elements (likely UI sounds)
+      if (el.duration > 1 && el.paused && !el.ended) {
+        Logger.info('Fallback: playing paused element', el.src?.substring(0, 50) || el.tagName);
+
+        // Re-register if needed (it might have a stale or no mediaId)
+        if (!el._autoStopMediaId || !this.mediaElements.has(el._autoStopMediaId)) {
+          this.reRegisterElement(el);
+        }
+
+        el.play().catch(() => {});
+        return true;
+      }
+    }
+
+    // Also try elements that have currentSrc but aren't playing
+    for (const el of mediaElements) {
+      if (el.currentSrc && el.paused) {
+        Logger.info('Fallback: playing element with currentSrc');
+
+        if (!el._autoStopMediaId || !this.mediaElements.has(el._autoStopMediaId)) {
+          this.reRegisterElement(el);
+        }
+
+        el.play().catch(() => {});
+        return true;
+      }
+    }
+
+    Logger.warn('Fallback: no paused media found to play');
+    return false;
+  }
+
+  /**
+   * Re-register a media element that might have been recreated
+   * @param {HTMLMediaElement} element
+   */
+  reRegisterElement(element) {
+    // This should be overridden in subclasses that have proper registration
+    const mediaId = this.generateMediaId();
+    element._autoStopMediaId = mediaId;
+
+    const info = this.getMediaInfo(element, mediaId);
+    this.mediaElements.set(mediaId, { element, info });
+
+    Logger.info('Re-registered element with new mediaId:', mediaId);
+
+    // Notify background of the new media
+    this.sendMessage(AUTOSTOP.MSG.MEDIA_REGISTERED, info);
+
+    return mediaId;
   }
 
   /**
@@ -150,7 +213,37 @@ class BaseAdapter {
     if (stored?.element) {
       this.pausedByExtension.add(mediaId);
       stored.element.pause();
+    } else {
+      // Fallback: pause any playing media
+      Logger.warn('Element not found for mediaId:', mediaId, '- using fallback');
+      this.pauseAnyPlaying();
     }
+  }
+
+  /**
+   * Fallback: pause any playing media element on the page
+   */
+  pauseAnyPlaying() {
+    const mediaElements = document.querySelectorAll('video, audio');
+    for (const el of mediaElements) {
+      if (!el.paused && !el.ended) {
+        Logger.info('Fallback: pausing playing element');
+
+        // Re-register if needed
+        if (!el._autoStopMediaId || !this.mediaElements.has(el._autoStopMediaId)) {
+          const newMediaId = this.reRegisterElement(el);
+          this.pausedByExtension.add(newMediaId);
+        } else {
+          this.pausedByExtension.add(el._autoStopMediaId);
+        }
+
+        el.pause();
+        return true;
+      }
+    }
+
+    Logger.warn('Fallback: no playing media found to pause');
+    return false;
   }
 
   /**

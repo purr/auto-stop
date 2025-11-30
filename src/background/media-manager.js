@@ -90,8 +90,9 @@ class MediaManager {
         this.activeMedia.frameId === frameId &&
         this.activeMedia.mediaId === data.mediaId) {
       Logger.info('Active media unregistered, resuming previous');
+      const stoppedMedia = { ...this.activeMedia };
       this.activeMedia = null;
-      await this.scheduleResumePrevious();
+      await this.scheduleResumePrevious(null, stoppedMedia);
     }
 
     this.broadcastUpdate();
@@ -160,9 +161,26 @@ class MediaManager {
 
     // Remove from paused stack if it was there (it's now playing)
     // Also clear its manuallyPaused flag since it's now active
-    this.pausedStack = this.pausedStack.filter(m =>
-      !(m.tabId === tabId && m.frameId === frameId && m.mediaId === data.mediaId)
-    );
+    // IMPORTANT: Also remove OLD entries from the same tab that might be stale
+    // (sites like YouTube recreate media elements with new IDs)
+    const prevStackLength = this.pausedStack.length;
+    this.pausedStack = this.pausedStack.filter(m => {
+      // Always remove the exact match
+      if (m.tabId === tabId && m.frameId === frameId && m.mediaId === data.mediaId) {
+        return false;
+      }
+      // Also remove other entries from the same tab/frame that are likely stale
+      // (if a tab has new media playing, old entries are probably invalid)
+      if (m.tabId === tabId && m.frameId === frameId) {
+        Logger.debug('Cleaning up stale paused entry from same tab:', m.title, m.mediaId);
+        return false;
+      }
+      return true;
+    });
+
+    if (prevStackLength !== this.pausedStack.length) {
+      Logger.debug('Cleaned up', prevStackLength - this.pausedStack.length, 'entries from paused stack');
+    }
 
     // Set as active with timestamp
     this.activeMedia = {
@@ -212,6 +230,9 @@ class MediaManager {
 
       Logger.info(data.manual ? 'Manual pause detected' : 'Extension pause detected', '- adding to paused stack:', this.activeMedia.title);
 
+      // Store the stopped media info for auto-expire check (before clearing activeMedia)
+      const stoppedMedia = { ...this.activeMedia };
+
       // Add to paused stack (remove if already there first)
       this.pausedStack = this.pausedStack.filter(m =>
         !(m.tabId === tabId && m.frameId === frameId && m.mediaId === data.mediaId)
@@ -226,7 +247,8 @@ class MediaManager {
 
       if (!data.manual || settings.resumeOnManualPause) {
         // Try to resume - will skip any manually-paused items in the stack
-        await this.scheduleResumePrevious();
+        // Pass stoppedMedia for auto-expire check
+        await this.scheduleResumePrevious(null, stoppedMedia);
       } else {
         Logger.info('Manual pause with resumeOnManualPause=false - not auto-resuming');
         this.broadcastUpdate();
@@ -308,8 +330,9 @@ class MediaManager {
         this.activeMedia.frameId === frameId &&
         this.activeMedia.mediaId === data.mediaId) {
       Logger.info('Active media ended, scheduling resume of previous');
+      const stoppedMedia = { ...this.activeMedia };
       this.activeMedia = null;
-      await this.scheduleResumePrevious();
+      await this.scheduleResumePrevious(null, stoppedMedia);
     }
 
     this.broadcastUpdate();
@@ -364,8 +387,10 @@ class MediaManager {
 
   /**
    * Schedule resuming previous media with delay and fade-in
+   * @param {Object|null} specificMedia - Specific media to resume (bypasses stack)
+   * @param {Object|null} stoppedMedia - The media that just stopped (for auto-expire check)
    */
-  async scheduleResumePrevious(specificMedia = null) {
+  async scheduleResumePrevious(specificMedia = null, stoppedMedia = null) {
     // Cancel any existing pending resume
     this.cancelPendingResume();
 
@@ -384,9 +409,10 @@ class MediaManager {
 
     const settings = window.storageManager.get();
 
-    // Check auto-expire: if current media played too long, don't resume
-    if (this.activeMedia && settings.autoExpireSeconds > 0) {
-      const playDuration = (Date.now() - (this.activeMedia.startedAt || Date.now())) / 1000;
+    // Check auto-expire: if the stopped media played too long, don't auto-resume
+    // stoppedMedia contains the startedAt timestamp from when it started playing
+    if (stoppedMedia && settings.autoExpireSeconds > 0) {
+      const playDuration = (Date.now() - (stoppedMedia.startedAt || Date.now())) / 1000;
       if (playDuration >= settings.autoExpireSeconds) {
         Logger.info(`Auto-expire: Media played for ${Math.round(playDuration)}s (threshold: ${settings.autoExpireSeconds}s), not resuming`);
         // Put it back in the stack so user can manually resume
@@ -654,6 +680,7 @@ class MediaManager {
         // IMPORTANT: Update state BEFORE sending pause command to avoid race condition
         // (content script will send MEDIA_PAUSE back, which could trigger auto-resume)
         let shouldTryResume = false;
+        let stoppedMedia = null;
 
         if (this.activeMedia &&
             this.activeMedia.tabId === tabId &&
@@ -661,6 +688,10 @@ class MediaManager {
             this.activeMedia.mediaId === mediaId) {
 
           Logger.info('Manual pause via popup, adding to paused stack:', this.activeMedia.title);
+
+          // Store for auto-expire check
+          stoppedMedia = { ...this.activeMedia };
+
           // Remove if already in stack
           this.pausedStack = this.pausedStack.filter(m =>
             !(m.tabId === tabId && m.frameId === frameId && m.mediaId === mediaId)
@@ -689,7 +720,7 @@ class MediaManager {
         // Try to resume previous media if setting is enabled
         if (shouldTryResume) {
           Logger.info('resumeOnManualPause is enabled, trying to resume previous media');
-          await this.scheduleResumePrevious();
+          await this.scheduleResumePrevious(null, stoppedMedia);
         }
       } else if (action === AUTOSTOP.ACTION.SKIP) {
         await browser.tabs.sendMessage(tabId, {
@@ -712,9 +743,10 @@ class MediaManager {
   async handleTabClosed(tabId) {
     Logger.info('Tab closed:', tabId);
 
-    // Check if this tab had the active media
-    const hadActiveMedia = this.activeMedia && this.activeMedia.tabId === tabId;
-    const activeTitle = hadActiveMedia ? this.activeMedia.title : null;
+    // Store the active media info for auto-expire check before clearing
+    const stoppedMedia = (this.activeMedia && this.activeMedia.tabId === tabId)
+      ? { ...this.activeMedia }
+      : null;
 
     // Remove all media from this tab
     for (const [key, media] of this.allMedia.entries()) {
@@ -740,10 +772,10 @@ class MediaManager {
     }
 
     // If active was in this tab, resume previous
-    if (hadActiveMedia) {
-      Logger.info('Active media tab closed:', activeTitle, '→ Scheduling resume');
+    if (stoppedMedia) {
+      Logger.info('Active media tab closed:', stoppedMedia.title, '→ Scheduling resume');
       this.activeMedia = null;
-      await this.scheduleResumePrevious();
+      await this.scheduleResumePrevious(null, stoppedMedia);
     }
 
     this.broadcastUpdate();

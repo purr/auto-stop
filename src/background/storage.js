@@ -55,14 +55,21 @@ class StorageManager {
 
   /**
    * Check if a URL is whitelisted
+   * Supports wildcards: *.example.com matches sub.example.com
    * @param {string} url
    */
   isWhitelisted(url) {
     if (!url) return false;
     try {
       const hostname = new URL(url).hostname;
-      return this.settings.whitelist.some(domain => {
-        return hostname === domain || hostname.endsWith('.' + domain);
+      return this.settings.whitelist.some(pattern => {
+        // Wildcard pattern: *.example.com
+        if (pattern.startsWith('*.')) {
+          const baseDomain = pattern.slice(2); // Remove "*."
+          return hostname === baseDomain || hostname.endsWith('.' + baseDomain);
+        }
+        // Exact match or subdomain match
+        return hostname === pattern || hostname.endsWith('.' + pattern);
       });
     } catch {
       return false;

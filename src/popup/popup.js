@@ -58,8 +58,15 @@ class PopupController {
     document.getElementById('settingsBtn').addEventListener('click', () => {
       const panel = document.getElementById('settingsPanel');
       const btn = document.getElementById('settingsBtn');
+      const isOpening = !panel.classList.contains('visible');
+
       panel.classList.toggle('visible');
       btn.classList.toggle('active');
+
+      // Collapse whitelist when closing settings
+      if (!isOpening) {
+        this.collapseWhitelist();
+      }
     });
 
     // Mode toggle (pause/mute)
@@ -73,6 +80,11 @@ class PopupController {
           b.classList.toggle('active', b.dataset.value === btn.dataset.value);
         });
       });
+    });
+
+    // Whitelist expand/collapse
+    document.getElementById('whitelistExpandHeader').addEventListener('click', () => {
+      this.toggleWhitelist();
     });
 
     // Add whitelist
@@ -155,6 +167,20 @@ class PopupController {
   removeWhitelistDomain(domain) {
     const newWhitelist = this.state.settings.whitelist.filter(d => d !== domain);
     this.updateSettings({ whitelist: newWhitelist });
+  }
+
+  toggleWhitelist() {
+    const header = document.getElementById('whitelistExpandHeader');
+    const content = document.getElementById('whitelistExpandContent');
+    header.classList.toggle('expanded');
+    content.classList.toggle('expanded');
+  }
+
+  collapseWhitelist() {
+    const header = document.getElementById('whitelistExpandHeader');
+    const content = document.getElementById('whitelistExpandContent');
+    header.classList.remove('expanded');
+    content.classList.remove('expanded');
   }
 
   async controlMedia(media, action) {
@@ -242,19 +268,25 @@ class PopupController {
       resumeOnManualPauseCheckbox.checked = settings.resumeOnManualPause ?? true;
     }
 
-    // Whitelist
+    // Whitelist count
+    const whitelistCount = document.getElementById('whitelistCount');
+    whitelistCount.textContent = settings.whitelist.length;
+
+    // Whitelist items
     const whitelistContainer = document.getElementById('whitelistItems');
-    whitelistContainer.innerHTML = settings.whitelist.map(domain => `
-      <li class="whitelist-item">
-        <span>${this.escapeHtml(domain)}</span>
-        <button class="remove-btn" data-domain="${this.escapeHtml(domain)}">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="18" y1="6" x2="6" y2="18"/>
-            <line x1="6" y1="6" x2="18" y2="18"/>
-          </svg>
-        </button>
-      </li>
-    `).join('');
+    whitelistContainer.innerHTML = settings.whitelist.length === 0
+      ? '<li class="whitelist-empty">No domains added</li>'
+      : settings.whitelist.map(domain => `
+        <li class="whitelist-item">
+          <span class="domain-name" title="${this.escapeHtml(domain)}">${this.escapeHtml(domain)}</span>
+          <button class="remove-btn" data-domain="${this.escapeHtml(domain)}" title="Remove">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </li>
+      `).join('');
 
     // Add remove handlers
     whitelistContainer.querySelectorAll('.remove-btn').forEach(btn => {
@@ -410,16 +442,20 @@ class PopupController {
     });
 
     countEl.textContent = filteredStack.length;
+    const wrapper = document.getElementById('pausedListWrapper');
 
     if (filteredStack.length === 0) {
       list.innerHTML = '';
       emptyState.classList.remove('hidden');
+      wrapper.classList.add('hidden');
+      wrapper.classList.remove('can-scroll-up', 'can-scroll-down');
       this.prevPausedStackIds = [];
       this.prevPausedStackState = '';
       return;
     }
 
     emptyState.classList.add('hidden');
+    wrapper.classList.remove('hidden');
 
     // Check if the filtered stack has actually changed (including manuallyPaused flag)
     const currentState = filteredStack.map(m => `${m.mediaId}:${m.manuallyPaused}`).join(',');
@@ -450,6 +486,32 @@ class PopupController {
         this.focusTab(media.tabId);
       });
     });
+
+    // Update scroll shadows
+    this.updateScrollShadows();
+  }
+
+  updateScrollShadows() {
+    const wrapper = document.getElementById('pausedListWrapper');
+    const list = document.getElementById('pausedList');
+
+    if (!wrapper || !list) return;
+
+    const updateShadows = () => {
+      const canScrollUp = list.scrollTop > 0;
+      const canScrollDown = list.scrollTop < (list.scrollHeight - list.clientHeight - 2);
+
+      wrapper.classList.toggle('can-scroll-up', canScrollUp);
+      wrapper.classList.toggle('can-scroll-down', canScrollDown);
+    };
+
+    // Initial check
+    updateShadows();
+
+    // Remove old listener and add new one
+    list.removeEventListener('scroll', this._scrollHandler);
+    this._scrollHandler = updateShadows;
+    list.addEventListener('scroll', this._scrollHandler);
   }
 
   renderMediaListItem(media) {

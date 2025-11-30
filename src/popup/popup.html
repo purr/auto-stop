@@ -20,7 +20,7 @@
       <button class="settings-btn" id="settingsBtn" title="Settings">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="3"/>
-          <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
         </svg>
       </button>
     </header>
@@ -54,8 +54,8 @@
 
       <div class="setting-group">
         <div class="setting-header">
-          <span class="setting-label">Resume Behavior</span>
-          <span class="setting-hint">When paused media resumes</span>
+          <span class="setting-label">Resume Effects</span>
+          <span class="setting-hint">How resumed media starts</span>
         </div>
 
         <div class="setting-row">
@@ -74,7 +74,7 @@
             <span>ms</span>
           </div>
         </div>
-        <div class="setting-micro-hint">How long to gradually increase volume</div>
+        <div class="setting-micro-hint">How long to gradually increase volume (0 = instant)</div>
 
         <div class="setting-row">
           <label for="fadeInStartVolume">Start Volume</label>
@@ -84,34 +84,34 @@
           </div>
         </div>
         <div class="setting-micro-hint">Initial volume when fading in</div>
+      </div>
+
+      <div class="setting-group">
+        <div class="setting-header">
+          <span class="setting-label">Auto-Resume Rules</span>
+          <span class="setting-hint">When to automatically resume paused media</span>
+        </div>
 
         <div class="setting-row checkbox-row">
           <label for="resumeOnManualPause">Resume on manual pause</label>
           <input type="checkbox" id="resumeOnManualPause" checked>
         </div>
-        <div class="setting-micro-hint">When you manually pause, try to resume previous (non-manual) media</div>
-      </div>
-
-      <div class="setting-group">
-        <div class="setting-header">
-          <span class="setting-label">Auto-Expire</span>
-          <span class="setting-hint">Stop auto-resuming after X seconds</span>
-        </div>
+        <div class="setting-micro-hint">When you manually pause, resume previous media</div>
 
         <div class="setting-row">
-          <label for="autoExpireSeconds">Expire After</label>
+          <label for="autoExpireSeconds">Auto-Expire</label>
           <div class="input-with-unit">
             <input type="number" id="autoExpireSeconds" min="0" max="3600" step="30" value="0">
             <span>sec</span>
           </div>
         </div>
-        <div class="setting-micro-hint">0 = disabled. If new media plays longer than this, old media won't auto-resume</div>
+        <div class="setting-micro-hint">Don't auto-resume if new media played longer than this (0 = disabled)</div>
       </div>
 
       <div class="setting-group">
         <div class="setting-header">
           <span class="setting-label">Whitelist</span>
-          <span class="setting-hint">Sites that never get paused</span>
+          <span class="setting-hint">Sites that never get paused (wildcards supported: *.example.com)</span>
         </div>
         <div class="whitelist-container">
           <div class="whitelist-input-row">
@@ -123,9 +123,18 @@
               </svg>
             </button>
           </div>
-          <ul class="whitelist-items" id="whitelistItems">
-            <!-- Dynamically populated -->
-          </ul>
+          <div class="whitelist-expand-header" id="whitelistExpandHeader">
+            <svg class="expand-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+            <span class="expand-label">Domains</span>
+            <span class="expand-count" id="whitelistCount">0</span>
+          </div>
+          <div class="whitelist-expand-content" id="whitelistExpandContent">
+            <ul class="whitelist-items" id="whitelistItems">
+              <!-- Dynamically populated -->
+            </ul>
+          </div>
         </div>
       </div>
     </section>
@@ -195,10 +204,16 @@
         <span>Paused</span>
         <span class="count" id="pausedCount">0</span>
       </div>
-      <div class="media-list" id="pausedList">
-        <!-- Dynamically populated -->
+      <div class="media-list-wrapper" id="pausedListWrapper">
+        <div class="media-list" id="pausedList">
+          <!-- Dynamically populated -->
+        </div>
       </div>
       <div class="empty-state small" id="emptyPaused">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="6" y="4" width="4" height="16" rx="1"/>
+          <rect x="14" y="4" width="4" height="16" rx="1"/>
+        </svg>
         <span>No paused media</span>
       </div>
     </section>
