@@ -46,9 +46,6 @@ jobs:
       - name: Get version from manifest
         id: get_version
         run: |
-          echo "📄 Full manifest.json:"
-          cat src/manifest.json
-          echo ""
           VERSION=$(jq -r '.version' src/manifest.json)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "📦 Building version: $VERSION"
