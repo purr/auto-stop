@@ -3,6 +3,9 @@ name: Build and Sign Firefox Extension
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 # REQUIRED SECRETS (add in GitHub repo Settings → Secrets and variables → Actions):
 # - AMO_JWT_ISSUER: Get from https://addons.mozilla.org/developers/addon/api/key/
 # - AMO_JWT_SECRET: Get from https://addons.mozilla.org/developers/addon/api/key/
