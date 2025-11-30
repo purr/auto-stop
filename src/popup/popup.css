@@ -137,16 +137,13 @@ body::-webkit-scrollbar-thumb {
 }
 
 .settings-btn svg {
+  width: 18px;
+  height: 18px;
   transition: transform 0.3s ease;
 }
 
 .settings-btn.active svg {
   transform: rotate(90deg);
-}
-
-.settings-btn svg {
-  width: 18px;
-  height: 18px;
 }
 
 /* Settings Panel */
@@ -740,7 +737,6 @@ body::-webkit-scrollbar-thumb {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
 
 .media-info .media-controls {
   margin-top: 4px;

@@ -1,4 +1,5 @@
 // Auto-Stop Media - Popup Script
+// Handles the extension popup UI: displays media state, settings, and controls
 
 class PopupController {
   constructor() {
@@ -12,7 +13,6 @@ class PopupController {
     };
 
     // Track previous state to avoid unnecessary re-renders
-    this.prevPausedStackIds = [];
     this.prevPausedStackState = '';
 
     this.init();
@@ -345,7 +345,7 @@ class PopupController {
     // Determine if actually playing
     const isPlaying = isPending ? false : (mediaInfo?.isPlaying ?? true);
 
-    // Cover - use DOM manipulation instead of innerHTML
+    // Cover (using DOM manipulation to avoid innerHTML security warnings)
     const coverEl = document.getElementById('activeCover');
     coverEl.textContent = '';
     if (displayMedia.cover) {
@@ -354,14 +354,7 @@ class PopupController {
       img.alt = 'Cover';
       coverEl.appendChild(img);
     } else {
-      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      svg.classList.add('cover-placeholder');
-      svg.setAttribute('viewBox', '0 0 24 24');
-      svg.setAttribute('fill', 'currentColor');
-      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      path.setAttribute('d', 'M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z');
-      svg.appendChild(path);
-      coverEl.appendChild(svg);
+      coverEl.appendChild(this.createMusicNoteSvg('cover-placeholder'));
     }
 
     // Type badge - show "RESUMING" or "FADING IN" when pending
@@ -459,7 +452,6 @@ class PopupController {
       emptyState.classList.remove('hidden');
       wrapper.classList.add('hidden');
       wrapper.classList.remove('can-scroll-up', 'can-scroll-down');
-      this.prevPausedStackIds = [];
       this.prevPausedStackState = '';
       return;
     }
@@ -478,7 +470,6 @@ class PopupController {
 
     // Update tracking
     this.prevPausedStackState = currentState;
-    this.prevPausedStackIds = filteredStack.map(m => m.mediaId);
 
     // Paused stack items - use DOM manipulation instead of innerHTML
     list.textContent = '';
@@ -533,13 +524,7 @@ class PopupController {
       img.alt = 'Cover';
       miniCover.appendChild(img);
     } else {
-      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      svg.setAttribute('viewBox', '0 0 24 24');
-      svg.setAttribute('fill', 'currentColor');
-      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      path.setAttribute('d', 'M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z');
-      svg.appendChild(path);
-      miniCover.appendChild(svg);
+      miniCover.appendChild(this.createMusicNoteSvg());
     }
     item.appendChild(miniCover);
 
@@ -611,11 +596,20 @@ class PopupController {
     }
   }
 
-  escapeHtml(str) {
-    if (!str) return '';
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
+  /**
+   * Create a music note SVG element (placeholder for missing cover art)
+   * @param {string} className - Optional CSS class to add
+   * @returns {SVGElement}
+   */
+  createMusicNoteSvg(className = '') {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    if (className) svg.classList.add(className);
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('fill', 'currentColor');
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', 'M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z');
+    svg.appendChild(path);
+    return svg;
   }
 }
 

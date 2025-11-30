@@ -3,7 +3,7 @@
 A Firefox extension that ensures only one media plays at a time across all your tabs. When new media starts playing, it automatically pauses other media. When you stop the current media, it resumes the previously paused one.
 
 ![Auto-Stop Media](https://img.shields.io/badge/Firefox-Extension-FF7139?logo=firefox-browser&logoColor=white)
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Version](https://img.shields.io/badge/version-1.1.5-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 ## ✨ Features
@@ -17,7 +17,7 @@ A Firefox extension that ensures only one media plays at a time across all your 
 - **Now Playing & Paused Stack**: See active media and paused media with cover art, titles, and controls
 - **Click to Focus**: Click on any media card to switch to that tab
 - **Blacklist**: Mark domains that should never be paused (supports wildcards: `*.example.com`)
-- **Play/Pause/Skip Controls**: Control media directly from the popup
+- **Full Playback Controls**: Play/Pause, Previous (⏮), and Next (⏭) buttons in the popup
 - **Resume Delay**: Configurable delay before resuming paused media (prevents accidental playback during loading)
 - **Fade-In**: Smooth volume fade-in when resuming media (no sudden loud audio)
 - **Auto-Expire**: Option to not resume old media if new media played for too long
@@ -50,7 +50,8 @@ For development/testing, you can load the extension temporarily:
 ## 🎮 How to Use
 
 1. **Click the extension icon** in your toolbar to open the popup
-2. **Now Playing**: Shows the currently active media with controls (play/pause, skip)
+2. **Now Playing**: Shows the currently active media with controls
+   - ⏮ Previous (seek to start), ▶/⏸ Play/Pause, ⏭ Next (skip to end)
    - Click the card to switch to that tab
    - Shows "Waiting..." or "Resuming..." when media is about to auto-resume
 3. **Paused**: Shows media that was paused (click play to resume, click card to focus tab)
@@ -160,9 +161,9 @@ To add support for a new site with a custom player:
 5. Override control methods as needed:
    - `play(mediaId)` - Start playback
    - `pause(mediaId)` - Pause playback
-   - `skip(mediaId)` - Skip to next track
+   - `skip(mediaId)` - Skip to next track (seeks to end)
+   - `prev(mediaId)` - Go to previous/start (seeks to beginning)
    - `setVolume(mediaId, volume)` - Set volume (0-1)
-   - `mute(mediaId)` / `unmute(mediaId)` - Mute controls
 6. Optionally override `reRegisterElement(element)` for sites that recreate media elements
 7. Register in `src/content/adapters/index.js`
 8. Add to `manifest.json` content scripts
@@ -216,8 +217,8 @@ The repository includes a GitHub workflow that builds and signs the extension au
    - Add `AMO_JWT_SECRET` with your JWT secret value
 
 **Build the extension:**
-- Push a version tag: `git tag v1.0.0 && git push --tags`
-- Or: **Actions** tab → **Build and Sign Firefox Extension** → **Run workflow**
+- **Automatic**: Just bump the version in `manifest.json` and push - the workflow triggers automatically!
+- **Manual**: **Actions** tab → **Build and Sign Firefox Extension** → **Run workflow**
 
 The signed `.xpi` file will be available as a download in the workflow run or GitHub Release.
 

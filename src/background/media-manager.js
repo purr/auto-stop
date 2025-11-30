@@ -551,13 +551,6 @@ class MediaManager {
   }
 
   /**
-   * Resume the most recently paused media (legacy - now uses scheduleResumePrevious)
-   */
-  async resumePreviousMedia() {
-    await this.scheduleResumePrevious();
-  }
-
-  /**
    * Send play command to a media element
    */
   async playMedia(tabId, frameId, mediaId) {
