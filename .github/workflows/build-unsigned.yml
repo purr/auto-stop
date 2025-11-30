@@ -1,11 +1,6 @@
 name: Build Unsigned Extension
 
 on:
-  push:
-    branches:
-      - main
-      - master
-  pull_request:
   workflow_dispatch:
 
 jobs:
@@ -34,24 +29,29 @@ jobs:
       - name: Lint extension
         run: web-ext lint --source-dir=src
 
-      - name: Build extension
+      - name: Build XPI
         run: |
-          web-ext build --source-dir=src --artifacts-dir=./build --overwrite-dest
-
-          # Rename .zip to .xpi
-          cd build
-          for f in *.zip; do
-            mv "$f" "${f%.zip}.xpi"
-          done
-
-          echo ""
+          mkdir -p build
+          cd src
+          zip -r ../build/auto_stop_media-${{ steps.get_version.outputs.version }}.xpi . -x "*.git*"
+          cd ..
           echo "✅ Built extension:"
-          ls -la
+          ls -la build/
 
-      - name: Upload XPI
-        uses: actions/upload-artifact@v4
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
         with:
-          name: auto-stop-media-${{ steps.get_version.outputs.version }}-unsigned
-          path: build/*.xpi
-          if-no-files-found: error
+          tag_name: v${{ steps.get_version.outputs.version }}-unsigned
+          name: v${{ steps.get_version.outputs.version }} (Unsigned)
+          files: build/*.xpi
+          body: |
+            ## ⚠️ Unsigned Build
+
+            This is an **unsigned** extension. It can only be installed in:
+            - Firefox Developer Edition
+            - Firefox Nightly
+
+            Set `xpinstall.signatures.required` to `false` in `about:config` first.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

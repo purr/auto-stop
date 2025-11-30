@@ -1,9 +1,6 @@
 name: Build and Sign Firefox Extension
 
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
 
 # REQUIRED SECRETS (add in GitHub repo Settings → Secrets and variables → Actions):
@@ -68,19 +65,12 @@ jobs:
           echo "✅ Signed extension files:"
           ls -la signed/
 
-      - name: Upload signed XPI
-        uses: actions/upload-artifact@v4
-        with:
-          name: auto-stop-media-${{ steps.get_version.outputs.version }}-signed
-          path: signed/*.xpi
-          if-no-files-found: error
-
       - name: Create Release
-        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
         with:
+          tag_name: v${{ steps.get_version.outputs.version }}
+          name: v${{ steps.get_version.outputs.version }}
           files: signed/*.xpi
-          generate_release_notes: true
           body: |
             ## Installation
 
@@ -88,7 +78,7 @@ jobs:
             2. Open Firefox and drag the file into the browser
             3. Click "Add" when prompted
 
-            The extension is now permanently installed!
+            ✅ This extension is **signed** and works in regular Firefox!
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
