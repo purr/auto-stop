@@ -28,8 +28,11 @@ class GenericAdapter extends BaseAdapter {
     // Observe DOM for new elements
     this.observeDOM();
 
-    // Periodic scan as backup
+    // Periodic scan as backup (registers new elements)
     setInterval(() => this.scanForMedia(), 2000);
+
+    // Periodic health check (validates tracked elements, syncs playing state)
+    setInterval(() => this.healthCheck(), 1000);
   }
 
   hookMediaElement() {
@@ -81,6 +84,59 @@ class GenericAdapter extends BaseAdapter {
         this.registerMediaElement(element);
       }
     }
+  }
+
+  /**
+   * Periodic health check to keep tracking in sync
+   * - Removes stale entries (elements no longer in DOM)
+   * - Detects playing media we might have lost track of
+   * - Sends heartbeat for currently playing media
+   */
+  healthCheck() {
+    // 1. Clean up stale entries (elements no longer in DOM or invalid)
+    for (const [mediaId, stored] of this.mediaElements.entries()) {
+      const element = stored.element;
+
+      // Check if element is still in DOM and valid
+      if (!element || !document.contains(element)) {
+        Logger.debug('Health check: removing stale entry', mediaId);
+        this.mediaElements.delete(mediaId);
+        this.pausedByExtension.delete(mediaId);
+        // Notify background that this media is gone
+        this.sendMessage(AUTOSTOP.MSG.MEDIA_UNREGISTERED, { mediaId });
+        continue;
+      }
+    }
+
+    // 2. Find any playing media in the page
+    const allMedia = document.querySelectorAll('video, audio');
+    let foundPlaying = false;
+
+    for (const element of allMedia) {
+      if (!element.paused && !element.ended && element.duration > 1) {
+        foundPlaying = true;
+
+        // Check if we're tracking this element
+        const mediaId = element._autoStopMediaId;
+
+        if (!mediaId || !this.mediaElements.has(mediaId)) {
+          // We have playing media that we're not tracking!
+          Logger.warn('Health check: found untracked playing media, registering');
+          this.registerMediaElement(element);
+          // The registration will send MEDIA_PLAY if it's playing
+        } else {
+          // We're tracking it - send a heartbeat to confirm it's still playing
+          const info = this.getMediaInfo(element, mediaId);
+          if (info.isPlaying) {
+            // Send play event to ensure background is in sync
+            this.sendMessage(AUTOSTOP.MSG.MEDIA_PLAY, info);
+          }
+        }
+      }
+    }
+
+    // 3. If no media is playing, check if background thinks something is
+    // This is handled by the background receiving no heartbeats
   }
 
   registerMediaElement(element) {

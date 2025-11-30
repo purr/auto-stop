@@ -19,6 +19,12 @@ class MediaDetector {
   }
 
   handleMessage(message) {
+    // Handle PING from background (heartbeat check)
+    if (message.type === 'PING') {
+      this.handlePing(message.mediaId);
+      return;
+    }
+
     if (message.type !== AUTOSTOP.MSG.CONTROL) return;
     if (!this.adapter) return;
 
@@ -47,6 +53,40 @@ class MediaDetector {
         this.adapter.setVolume(mediaId, volume);
         break;
     }
+  }
+
+  /**
+   * Handle PING from background - verify media state and respond
+   */
+  handlePing(mediaId) {
+    if (!this.adapter) return;
+
+    Logger.debug('Received PING for mediaId:', mediaId);
+
+    // Check if we have any playing media
+    const allMedia = document.querySelectorAll('video, audio');
+    for (const element of allMedia) {
+      if (!element.paused && !element.ended && element.duration > 1) {
+        // Found playing media - send play event to sync state
+        const currentMediaId = element._autoStopMediaId || mediaId;
+
+        // Re-register if needed
+        if (!element._autoStopMediaId) {
+          Logger.info('PING: Found untracked playing media, registering');
+          if (this.adapter.registerMediaElement) {
+            this.adapter.registerMediaElement(element);
+          }
+        } else {
+          // Send updated info
+          const info = this.adapter.getMediaInfo(element, currentMediaId);
+          this.adapter.sendMessage(AUTOSTOP.MSG.MEDIA_PLAY, info);
+        }
+        return;
+      }
+    }
+
+    // No playing media found - the background's active media is stale
+    Logger.info('PING: No playing media found');
   }
 }
 

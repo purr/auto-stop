@@ -4,7 +4,7 @@
 class MediaManager {
   constructor() {
     // Currently active media
-    this.activeMedia = null; // { tabId, frameId, mediaId, url, title, favicon, startedAt, ... }
+    this.activeMedia = null; // { tabId, frameId, mediaId, url, title, favicon, startedAt, lastHeartbeat, ... }
 
     // Stack of paused media (most recent first)
     // Each item has: { ...mediaInfo, manuallyPaused: boolean }
@@ -18,6 +18,66 @@ class MediaManager {
     // Resume state management
     this.pendingResume = null;      // { timeoutId, media, fadeInterval }
     this.originalVolumes = new Map(); // mediaId -> original volume (0-1)
+
+    // Start periodic stale check
+    this.startStaleCheck();
+  }
+
+  /**
+   * Start periodic check for stale active media
+   * If we don't hear from active media for too long, consider it gone
+   */
+  startStaleCheck() {
+    setInterval(() => {
+      this.checkForStaleMedia();
+    }, 3000); // Check every 3 seconds
+  }
+
+  /**
+   * Check if active media is stale (no heartbeat for too long)
+   */
+  checkForStaleMedia() {
+    if (!this.activeMedia) return;
+
+    const now = Date.now();
+    const lastHeartbeat = this.activeMedia.lastHeartbeat || this.activeMedia.startedAt || now;
+    const staleDuration = now - lastHeartbeat;
+
+    // If no heartbeat for 5 seconds, media might be gone
+    if (staleDuration > 5000) {
+      Logger.warn('Active media appears stale (no heartbeat for', Math.round(staleDuration / 1000), 'seconds)');
+
+      // Try to ping the tab to see if media is still there
+      this.pingActiveMedia();
+    }
+  }
+
+  /**
+   * Ping the active media's tab to verify it's still playing
+   */
+  async pingActiveMedia() {
+    if (!this.activeMedia) return;
+
+    const { tabId, frameId, mediaId } = this.activeMedia;
+
+    try {
+      // Try to send a message to the tab
+      await browser.tabs.sendMessage(tabId, {
+        type: 'PING',
+        mediaId,
+        frameId
+      });
+      // If we get here without error, the tab is still responsive
+      // The content script should respond with a play event if media is still playing
+    } catch (e) {
+      // Tab might be closed or content script unloaded
+      Logger.warn('Cannot reach active media tab, clearing active media');
+      const stoppedMedia = { ...this.activeMedia };
+      this.activeMedia = null;
+      this.broadcastUpdate();
+      // Try to resume previous media
+      await this.scheduleResumePrevious(null, stoppedMedia);
+    }
   }
 
   /**
@@ -191,7 +251,8 @@ class MediaManager {
       cover: data.cover || '',
       duration: data.duration || 0,
       currentTime: data.currentTime || 0,
-      startedAt: Date.now() // Track when this media started playing
+      startedAt: Date.now(), // Track when this media started playing
+      lastHeartbeat: Date.now() // Track last time we heard from this media
     };
 
     Logger.success('Now playing:', this.activeMedia.title);
@@ -283,16 +344,18 @@ class MediaManager {
   }
 
   /**
-   * Handle time update from content script
+   * Handle time update from content script (also serves as heartbeat)
    */
   handleTimeUpdate(tabId, frameId, data) {
     const key = this.getMediaKey(tabId, frameId, data.mediaId);
+    const now = Date.now();
 
     // Update in allMedia
     if (this.allMedia.has(key)) {
       const media = this.allMedia.get(key);
       media.currentTime = data.currentTime;
       media.duration = data.duration || media.duration;
+      media.lastHeartbeat = now;
     }
 
     // Update active media if this is it
@@ -303,6 +366,7 @@ class MediaManager {
       this.activeMedia.currentTime = data.currentTime;
       this.activeMedia.duration = data.duration || this.activeMedia.duration;
       this.activeMedia.playbackRate = data.playbackRate || 1;
+      this.activeMedia.lastHeartbeat = now; // Update heartbeat timestamp
 
       this.broadcastUpdate();
     }
