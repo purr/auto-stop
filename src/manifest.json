@@ -3,8 +3,14 @@
   "name": "Auto-Stop Media",
   "version": "1.0.0",
   "description": "Automatically pause media in other tabs when new media starts playing. Only one media plays at a time.",
-  "author": "You",
-  "homepage_url": "https://github.com/yourusername/auto-stop",
+  "author": "purr",
+  "homepage_url": "https://github.com/purr/auto-stop",
+
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "{a8f133d7-f5a5-4041-9fa0-56b1eeaa844e}"
+    }
+  },
 
   "permissions": [
     "tabs",
