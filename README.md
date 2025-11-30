@@ -84,12 +84,6 @@ Click the ⚙️ icon in the popup to access settings:
   - Example: `spotify.com` - Spotify will always keep playing even if you start media elsewhere
   - Blacklisted media doesn't appear in the popup at all
 
-## 🎨 Theme
-
-The extension uses the beautiful [Rosé Pine](https://rosepinetheme.com/) dark theme, featuring:
-- Deep purple-blue backgrounds
-- Rose and iris accent colors
-- Smooth animations and transitions
 
 ## 🔧 How It Works
 
@@ -179,13 +173,6 @@ See `soundcloud-adapter.js` for a complete example of a site-specific adapter.
 - Live streams may not report accurate duration
 
 ## 📋 TODO / Future Ideas
-
-### 🕐 Video Preview Delay (Planned)
-Add a configurable delay before *pausing* other media when new media starts. This would help with:
-- **Video previews**: Hovering over video thumbnails often triggers short autoplay previews - these should NOT stop your music
-- **Accidental triggers**: Brief media interactions shouldn't interrupt what you're listening to
-
-**Note**: Resume delay and fade-in are already implemented! This is specifically for delaying the *pause* action.
 
 ### Other Ideas
 - Keyboard shortcuts for global control
