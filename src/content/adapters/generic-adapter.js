@@ -16,6 +16,19 @@ class GenericAdapter extends BaseAdapter {
     return 0; // Lowest priority - used as fallback
   }
 
+  /**
+   * Check if a media element has audible sound
+   * Returns false for muted elements or elements with zero volume
+   */
+  hasAudio(element) {
+    if (!element) return false;
+    // Muted elements don't count
+    if (element.muted) return false;
+    // Zero volume doesn't count
+    if (element.volume === 0) return false;
+    return true;
+  }
+
   init() {
     super.init();
 
@@ -108,12 +121,13 @@ class GenericAdapter extends BaseAdapter {
       }
     }
 
-    // 2. Find any playing media in the page
+    // 2. Find any playing media WITH AUDIO in the page
     const allMedia = document.querySelectorAll('video, audio');
     let foundPlaying = false;
 
     for (const element of allMedia) {
-      if (!element.paused && !element.ended && element.duration > 1) {
+      // Only consider media that is playing, has duration, AND has audio
+      if (!element.paused && !element.ended && element.duration > 1 && this.hasAudio(element)) {
         foundPlaying = true;
 
         // Check if we're tracking this element
@@ -121,7 +135,7 @@ class GenericAdapter extends BaseAdapter {
 
         if (!mediaId || !this.mediaElements.has(mediaId)) {
           // We have playing media that we're not tracking!
-          Logger.warn('Health check: found untracked playing media, registering');
+          Logger.warn('Health check: found untracked playing media with audio, registering');
           this.registerMediaElement(element);
           // The registration will send MEDIA_PLAY if it's playing
         } else {
@@ -224,9 +238,12 @@ class GenericAdapter extends BaseAdapter {
       }
     });
 
-    // Send time updates to background (throttled)
+    // Send time updates to background (throttled) - only if has audio
     let lastTimeUpdate = 0;
     element.addEventListener('timeupdate', () => {
+      // Only send updates for media with audio
+      if (!this.hasAudio(element)) return;
+
       const now = Date.now();
       // Send update every 500ms for smooth display
       if (now - lastTimeUpdate > 500) {
@@ -239,9 +256,22 @@ class GenericAdapter extends BaseAdapter {
         });
       }
     });
+
+    // Detect when muted media becomes unmuted and starts making sound
+    element.addEventListener('volumechange', () => {
+      if (!element.paused && !element.ended && this.hasAudio(element)) {
+        Logger.debug('Media unmuted/volume increased while playing, notifying');
+        this.notifyPlay(element, mediaId);
+      }
+    });
   }
 
   notifyPlay(element, mediaId) {
+    // Only notify if media has audio (not muted, volume > 0)
+    if (!this.hasAudio(element)) {
+      Logger.debug('Skipping play notification for muted/silent media');
+      return;
+    }
     const info = this.getMediaInfo(element, mediaId);
     this.sendMessage(AUTOSTOP.MSG.MEDIA_PLAY, info);
   }

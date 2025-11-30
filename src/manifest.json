@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Auto-Stop Media",
-  "version": "1.1.7",
+  "version": "1.1.8",
   "description": "Automatically pause media in other tabs when new media starts playing. Only one media plays at a time.",
   "author": "purr",
   "homepage_url": "https://github.com/purr/auto-stop",
