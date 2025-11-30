@@ -85,28 +85,28 @@
 
       <div class="setting-group">
         <div class="setting-header">
-          <span class="setting-label">Whitelist</span>
-          <span class="setting-hint">Sites that never get paused (wildcards supported: *.example.com)</span>
+          <span class="setting-label">Blacklist</span>
+          <span class="setting-hint">Sites to ignore (wildcards supported: *.example.com)</span>
         </div>
-        <div class="whitelist-container">
-          <div class="whitelist-input-row">
-            <input type="text" id="whitelistInput" placeholder="example.com" class="whitelist-input">
-            <button class="add-btn" id="addWhitelistBtn">
+        <div class="Blacklist-container">
+          <div class="Blacklist-input-row">
+            <input type="text" id="BlacklistInput" placeholder="example.com" class="Blacklist-input">
+            <button class="add-btn" id="addBlacklistBtn">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <line x1="12" y1="5" x2="12" y2="19"/>
                 <line x1="5" y1="12" x2="19" y2="12"/>
               </svg>
             </button>
           </div>
-          <div class="whitelist-expand-header" id="whitelistExpandHeader">
+          <div class="Blacklist-expand-header" id="BlacklistExpandHeader">
             <svg class="expand-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="9 18 15 12 9 6"/>
             </svg>
             <span class="expand-label">Domains</span>
-            <span class="expand-count" id="whitelistCount">0</span>
+            <span class="expand-count" id="BlacklistCount">0</span>
           </div>
-          <div class="whitelist-expand-content" id="whitelistExpandContent">
-            <ul class="whitelist-items" id="whitelistItems">
+          <div class="Blacklist-expand-content" id="BlacklistExpandContent">
+            <ul class="Blacklist-items" id="BlacklistItems">
               <!-- Dynamically populated -->
             </ul>
           </div>

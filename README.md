@@ -16,7 +16,7 @@ A Firefox extension that ensures only one media plays at a time across all your 
 - **Dynamic Icon**: Shows ▶ (play) when idle, ‖ (pause) when media is playing
 - **Now Playing & Paused Stack**: See active media and paused media with cover art, titles, and controls
 - **Click to Focus**: Click on any media card to switch to that tab
-- **Whitelist**: Mark domains that should never be paused (supports wildcards: `*.example.com`)
+- **Blacklist**: Mark domains that should never be paused (supports wildcards: `*.example.com`)
 - **Play/Pause/Skip Controls**: Control media directly from the popup
 - **Resume Delay**: Configurable delay before resuming paused media (prevents accidental playback during loading)
 - **Fade-In**: Smooth volume fade-in when resuming media (no sudden loud audio)
@@ -24,11 +24,19 @@ A Firefox extension that ensures only one media plays at a time across all your 
 - **Manual Pause Tracking**: Manually paused media shows a badge and won't auto-resume (configurable)
 - **Pending Resume Indicator**: Visual feedback when media is about to resume (pulsing card during delay)
 
-## 📦 Installation (Temporary - Development)
+## 📦 Installation
 
-Since this extension is not yet published on Firefox Add-ons, you can load it temporarily for testing:
+### Method 1: Install Signed XPI (Recommended)
 
-### Method 1: about:debugging (Recommended)
+1. Go to the [Releases](../../releases) page
+2. Download the latest `.xpi` file
+3. Open Firefox and drag the `.xpi` file into the browser window
+4. Click **"Add"** when prompted
+5. Done! The extension is permanently installed
+
+### Method 2: Temporary Load (Development)
+
+For development/testing, you can load the extension temporarily:
 
 1. Open Firefox
 2. Type `about:debugging` in the address bar and press Enter
@@ -38,14 +46,6 @@ Since this extension is not yet published on Firefox Add-ons, you can load it te
 6. The extension will be loaded and active!
 
 > ⚠️ **Note**: Temporary extensions are removed when Firefox closes. You'll need to reload it each session.
-
-### Method 2: about:addons
-
-1. Open Firefox
-2. Type `about:addons` in the address bar
-3. Click the gear icon (⚙️) → **"Debug Add-ons"**
-4. Click **"Load Temporary Add-on..."**
-5. Select the `manifest.json` file from the `src` folder
 
 ## 🎮 How to Use
 
@@ -78,10 +78,10 @@ Click the ⚙️ icon in the popup to access settings:
     - Set to 0 to disable (always resume)
     - Example: Set to 120 → if you watch a video for 2+ minutes, your music won't auto-resume
 
-- **Whitelist**: Add domains that should never be paused
+- **Blacklist**: Add domains that should never be paused
   - Supports wildcards: `*.example.com` matches all subdomains
   - Example: `spotify.com` - Spotify will always keep playing even if you start media elsewhere
-  - Whitelisted media doesn't appear in the popup at all
+  - Blacklisted media doesn't appear in the popup at all
 
 ## 🎨 Theme
 
@@ -113,12 +113,15 @@ The extension uses the beautiful [Rosé Pine](https://rosepinetheme.com/) dark t
    - Manually paused items are skipped during auto-resume
    - Volume fades in smoothly from the configured start volume
 
-5. **Whitelist** domains get priority - they're never paused and don't appear in the popup
+5. **Blacklist** domains get priority - they're never paused and don't appear in the popup
 
 ## 📁 Project Structure
 
 ```
 auto-stop/
+├── .github/
+│   └── workflows/
+│       └── build-and-sign.yml    # GitHub Actions workflow for building & signing
 ├── src/                          # Extension source code
 │   ├── manifest.json             # Extension manifest
 │   ├── shared/
@@ -191,6 +194,40 @@ Add a configurable delay before *pausing* other media when new media starts. Thi
 - Playback history
 - Ignore media below a certain volume threshold
 - Ignore short media (< X seconds)
+
+## 🔨 Building & Signing
+
+### Automatic (GitHub Actions)
+
+The repository includes a GitHub workflow that automatically builds and signs the extension.
+
+**Setup:**
+1. Get your API credentials from [Mozilla Add-ons](https://addons.mozilla.org/developers/addon/api/key/)
+2. Add these secrets to your GitHub repository (Settings → Secrets → Actions):
+   - `AMO_JWT_ISSUER` - Your JWT issuer key
+   - `AMO_JWT_SECRET` - Your JWT secret key
+
+**Trigger a build:**
+- Push a tag: `git tag v1.0.0 && git push --tags`
+- Or run manually from Actions tab → "Build and Sign Firefox Extension" → "Run workflow"
+
+The signed `.xpi` file will be available in the release or as a workflow artifact.
+
+### Manual Build
+
+```bash
+# Install web-ext
+npm install -g web-ext
+
+# Lint the extension
+web-ext lint --source-dir=src
+
+# Build unsigned zip
+web-ext build --source-dir=src
+
+# Sign with Mozilla (requires API credentials)
+web-ext sign --source-dir=src --api-key=YOUR_KEY --api-secret=YOUR_SECRET --channel=unlisted
+```
 
 ## 🗑️ Removed Features
 

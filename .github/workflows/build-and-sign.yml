@@ -1,0 +1,87 @@
+name: Build and Sign Firefox Extension
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (leave empty to use manifest version)'
+        required: false
+        default: ''
+
+jobs:
+  build-and-sign:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install web-ext
+        run: npm install -g web-ext
+
+      - name: Get version from manifest
+        id: get_version
+        run: |
+          VERSION=$(jq -r '.version' src/manifest.json)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+
+      - name: Lint extension
+        run: web-ext lint --source-dir=src
+
+      - name: Build unsigned extension
+        run: |
+          web-ext build --source-dir=src --artifacts-dir=./artifacts --overwrite-dest
+          echo "Built unsigned extension:"
+          ls -la artifacts/
+
+      - name: Sign extension with Mozilla
+        if: ${{ env.AMO_JWT_ISSUER != '' && env.AMO_JWT_SECRET != '' }}
+        env:
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          web-ext sign \
+            --source-dir=src \
+            --artifacts-dir=./artifacts-signed \
+            --api-key=$AMO_JWT_ISSUER \
+            --api-secret=$AMO_JWT_SECRET \
+            --channel=unlisted
+          echo "Signed extension:"
+          ls -la artifacts-signed/
+
+      - name: Upload unsigned artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: auto-stop-media-unsigned-${{ steps.get_version.outputs.version }}
+          path: artifacts/*.zip
+
+      - name: Upload signed artifact
+        if: ${{ env.AMO_JWT_ISSUER != '' && env.AMO_JWT_SECRET != '' }}
+        uses: actions/upload-artifact@v4
+        env:
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        with:
+          name: auto-stop-media-signed-${{ steps.get_version.outputs.version }}
+          path: artifacts-signed/*.xpi
+
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            artifacts/*.zip
+            artifacts-signed/*.xpi
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

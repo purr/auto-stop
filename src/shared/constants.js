@@ -61,7 +61,7 @@ const AUTOSTOP = {
 
   // Default settings
   DEFAULT_SETTINGS: {
-    whitelist: [],
+    Blacklist: [],
     // Resume behavior
     resumeDelay: 1500,        // ms to wait before resuming (prevents accidental playback)
     fadeInDuration: 2000,     // ms for volume fade-in

@@ -7,7 +7,7 @@ class PopupController {
       pausedStack: [],
       allMedia: [],
       settings: {
-        whitelist: []
+        Blacklist: []
       }
     };
 
@@ -62,25 +62,25 @@ class PopupController {
       panel.classList.toggle('visible');
       btn.classList.toggle('active');
 
-      // Collapse whitelist when closing settings
+      // Collapse Blacklist when closing settings
       if (!isOpening) {
-        this.collapseWhitelist();
+        this.collapseBlacklist();
       }
     });
 
-    // Whitelist expand/collapse
-    document.getElementById('whitelistExpandHeader').addEventListener('click', () => {
-      this.toggleWhitelist();
+    // Blacklist expand/collapse
+    document.getElementById('BlacklistExpandHeader').addEventListener('click', () => {
+      this.toggleBlacklist();
     });
 
-    // Add whitelist
-    document.getElementById('addWhitelistBtn').addEventListener('click', () => {
-      this.addWhitelistDomain();
+    // Add Blacklist
+    document.getElementById('addBlacklistBtn').addEventListener('click', () => {
+      this.addBlacklistDomain();
     });
 
-    document.getElementById('whitelistInput').addEventListener('keypress', (e) => {
+    document.getElementById('BlacklistInput').addEventListener('keypress', (e) => {
       if (e.key === 'Enter') {
-        this.addWhitelistDomain();
+        this.addBlacklistDomain();
       }
     });
 
@@ -131,8 +131,8 @@ class PopupController {
     }
   }
 
-  addWhitelistDomain() {
-    const input = document.getElementById('whitelistInput');
+  addBlacklistDomain() {
+    const input = document.getElementById('BlacklistInput');
     let domain = input.value.trim().toLowerCase();
 
     if (!domain) return;
@@ -140,31 +140,31 @@ class PopupController {
     // Clean up domain
     domain = domain.replace(/^(https?:\/\/)?(www\.)?/, '').replace(/\/.*$/, '');
 
-    if (!domain || this.state.settings.whitelist.includes(domain)) {
+    if (!domain || this.state.settings.Blacklist.includes(domain)) {
       input.value = '';
       return;
     }
 
-    const newWhitelist = [...this.state.settings.whitelist, domain];
-    this.updateSettings({ whitelist: newWhitelist });
+    const newBlacklist = [...this.state.settings.Blacklist, domain];
+    this.updateSettings({ Blacklist: newBlacklist });
     input.value = '';
   }
 
-  removeWhitelistDomain(domain) {
-    const newWhitelist = this.state.settings.whitelist.filter(d => d !== domain);
-    this.updateSettings({ whitelist: newWhitelist });
+  removeBlacklistDomain(domain) {
+    const newBlacklist = this.state.settings.Blacklist.filter(d => d !== domain);
+    this.updateSettings({ Blacklist: newBlacklist });
   }
 
-  toggleWhitelist() {
-    const header = document.getElementById('whitelistExpandHeader');
-    const content = document.getElementById('whitelistExpandContent');
+  toggleBlacklist() {
+    const header = document.getElementById('BlacklistExpandHeader');
+    const content = document.getElementById('BlacklistExpandContent');
     header.classList.toggle('expanded');
     content.classList.toggle('expanded');
   }
 
-  collapseWhitelist() {
-    const header = document.getElementById('whitelistExpandHeader');
-    const content = document.getElementById('whitelistExpandContent');
+  collapseBlacklist() {
+    const header = document.getElementById('BlacklistExpandHeader');
+    const content = document.getElementById('BlacklistExpandContent');
     header.classList.remove('expanded');
     content.classList.remove('expanded');
   }
@@ -240,16 +240,16 @@ class PopupController {
       resumeOnManualPauseCheckbox.checked = settings.resumeOnManualPause ?? true;
     }
 
-    // Whitelist count
-    const whitelistCount = document.getElementById('whitelistCount');
-    whitelistCount.textContent = settings.whitelist.length;
+    // Blacklist count
+    const BlacklistCount = document.getElementById('BlacklistCount');
+    BlacklistCount.textContent = settings.Blacklist.length;
 
-    // Whitelist items
-    const whitelistContainer = document.getElementById('whitelistItems');
-    whitelistContainer.innerHTML = settings.whitelist.length === 0
-      ? '<li class="whitelist-empty">No domains added</li>'
-      : settings.whitelist.map(domain => `
-        <li class="whitelist-item">
+    // Blacklist items
+    const BlacklistContainer = document.getElementById('BlacklistItems');
+    BlacklistContainer.innerHTML = settings.Blacklist.length === 0
+      ? '<li class="Blacklist-empty">No domains added</li>'
+      : settings.Blacklist.map(domain => `
+        <li class="Blacklist-item">
           <span class="domain-name" title="${this.escapeHtml(domain)}">${this.escapeHtml(domain)}</span>
           <button class="remove-btn" data-domain="${this.escapeHtml(domain)}" title="Remove">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -261,10 +261,10 @@ class PopupController {
       `).join('');
 
     // Add remove handlers
-    whitelistContainer.querySelectorAll('.remove-btn').forEach(btn => {
+    BlacklistContainer.querySelectorAll('.remove-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        this.removeWhitelistDomain(btn.dataset.domain);
+        this.removeBlacklistDomain(btn.dataset.domain);
       });
     });
   }

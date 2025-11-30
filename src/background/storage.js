@@ -54,15 +54,15 @@ class StorageManager {
   }
 
   /**
-   * Check if a URL is whitelisted
+   * Check if a URL is Blacklisted
    * Supports wildcards: *.example.com matches sub.example.com
    * @param {string} url
    */
-  isWhitelisted(url) {
+  isBlacklisted(url) {
     if (!url) return false;
     try {
       const hostname = new URL(url).hostname;
-      return this.settings.whitelist.some(pattern => {
+      return this.settings.Blacklist.some(pattern => {
         // Wildcard pattern: *.example.com
         if (pattern.startsWith('*.')) {
           const baseDomain = pattern.slice(2); // Remove "*."

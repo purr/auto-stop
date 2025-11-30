@@ -33,9 +33,9 @@ class MediaManager {
   async handleMediaRegistered(tabId, frameId, data, tab) {
     const url = tab?.url || '';
 
-    // Don't register whitelisted media
-    if (window.storageManager.isWhitelisted(url)) {
-      Logger.debug('Whitelisted media registration ignored:', url);
+    // Don't register Blacklisted media
+    if (window.storageManager.isBlacklisted(url)) {
+      Logger.debug('Blacklisted media registration ignored:', url);
       return;
     }
 
@@ -107,9 +107,9 @@ class MediaManager {
     // Cancel any pending resume - new media is playing!
     this.cancelPendingResume();
 
-    // Check whitelist - whitelisted media is completely ignored
-    if (window.storageManager.isWhitelisted(url)) {
-      Logger.debug('Whitelisted media play ignored:', url);
+    // Check Blacklist - Blacklisted media is completely ignored
+    if (window.storageManager.isBlacklisted(url)) {
+      Logger.debug('Blacklisted media play ignored:', url);
       return;
     }
 
