@@ -110,6 +110,12 @@ class PopupController {
             value = Math.max(0, Math.min(100, value)) / 100;
           }
 
+          // Clamp autoExpireSeconds to 0-1000
+          if (id === 'autoExpireSeconds') {
+            value = Math.max(0, Math.min(1000, value));
+            input.value = value; // Update display
+          }
+
           this.updateSettings({ [id]: value });
         });
       }

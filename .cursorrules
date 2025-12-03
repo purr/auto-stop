@@ -1,0 +1,34 @@
+# Auto-Stop Media Extension - Cursor Rules
+
+## Version Bumping
+When making changes to extension code (any file in `src/`), always bump the version in `src/manifest.json`:
+- For bug fixes: bump patch version (e.g., 1.1.5 → 1.1.6)
+- For new features: bump minor version (e.g., 1.1.5 → 1.2.0)
+- For breaking changes: bump major version (e.g., 1.1.5 → 2.0.0)
+
+The version field is located at the top of `src/manifest.json`.
+
+## Code Style
+- Use ES6+ JavaScript features
+- Follow existing code patterns and naming conventions
+- Add comments for complex logic
+- Use the Logger utility for debug/info/error messages
+
+## Firefox Extension Specifics
+- This is a Manifest V2 Firefox extension
+- Use `browser.*` APIs (not `chrome.*`)
+- Test changes by loading as temporary add-on in `about:debugging`
+
+## File Structure
+- `src/background/` - Background scripts (media-manager, storage)
+- `src/content/` - Content scripts and adapters for different sites
+- `src/popup/` - Extension popup UI (HTML, CSS, JS)
+- `src/shared/` - Shared constants and utilities
+- `src/icons/` - Extension icons
+
+## Testing Reminders
+- Test with multiple media sources (YouTube, SoundCloud, etc.)
+- Verify auto-pause/resume behavior works correctly
+- Check that settings persist after browser restart
+- Ensure popup UI renders correctly
+

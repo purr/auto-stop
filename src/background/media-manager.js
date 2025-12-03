@@ -351,18 +351,9 @@ class MediaManager {
 
       this.activeMedia = null;
 
-      // Try to auto-resume previous media
-      // findNextAutoResumable() will skip any items with manuallyPaused: true
-      const settings = window.storageManager.get();
-
-      if (!data.manual || settings.resumeOnManualPause) {
-        // Try to resume - will skip any manually-paused items in the stack
-        // Pass stoppedMedia for auto-expire check
-        await this.scheduleResumePrevious(null, stoppedMedia);
-      } else {
-        Logger.info('Manual pause with resumeOnManualPause=false - not auto-resuming');
-        this.broadcastUpdate();
-      }
+      // Always call scheduleResumePrevious - it handles both auto-expire AND resumeOnManualPause
+      // Auto-expire takes priority: if media played too long, don't resume regardless of other settings
+      await this.scheduleResumePrevious(null, stoppedMedia, data.manual);
     } else {
       // Media was paused but it wasn't the active one
       // Still add/update it in the paused stack if it exists in allMedia
@@ -502,10 +493,34 @@ class MediaManager {
    * Schedule resuming previous media with delay and fade-in
    * @param {Object|null} specificMedia - Specific media to resume (bypasses stack)
    * @param {Object|null} stoppedMedia - The media that just stopped (for auto-expire check)
+   * @param {boolean} wasManualPause - Whether the stop was caused by user action (not extension)
    */
-  async scheduleResumePrevious(specificMedia = null, stoppedMedia = null) {
+  async scheduleResumePrevious(specificMedia = null, stoppedMedia = null, wasManualPause = false) {
     // Cancel any existing pending resume
     this.cancelPendingResume();
+
+    const settings = window.storageManager.get();
+
+    // PRIORITY 1: Check auto-expire FIRST (takes precedence over all other settings)
+    // If the stopped media played for longer than autoExpireSeconds, don't resume anything
+    if (stoppedMedia && settings.autoExpireSeconds > 0) {
+      const playDuration = (Date.now() - (stoppedMedia.startedAt || Date.now())) / 1000;
+      Logger.debug(`Auto-expire check: played ${Math.round(playDuration)}s, threshold ${settings.autoExpireSeconds}s`);
+
+      if (playDuration >= settings.autoExpireSeconds) {
+        Logger.info(`AUTO-EXPIRE TRIGGERED: Media played for ${Math.round(playDuration)}s (>= ${settings.autoExpireSeconds}s) - NOT resuming old media`);
+        this.broadcastUpdate();
+        return; // Don't resume anything
+      }
+    }
+
+    // PRIORITY 2: Check resumeOnManualPause setting
+    // Only applies if media played LESS than autoExpireSeconds
+    if (wasManualPause && !settings.resumeOnManualPause) {
+      Logger.info('Manual pause with resumeOnManualPause=false - not auto-resuming');
+      this.broadcastUpdate();
+      return;
+    }
 
     // Get media to resume
     let toResume = specificMedia;
@@ -518,21 +533,6 @@ class MediaManager {
       Logger.debug('No eligible media to auto-resume (all are manually paused or stack is empty)');
       this.broadcastUpdate();
       return;
-    }
-
-    const settings = window.storageManager.get();
-
-    // Check auto-expire: if the stopped media played too long, don't auto-resume
-    // stoppedMedia contains the startedAt timestamp from when it started playing
-    if (stoppedMedia && settings.autoExpireSeconds > 0) {
-      const playDuration = (Date.now() - (stoppedMedia.startedAt || Date.now())) / 1000;
-      if (playDuration >= settings.autoExpireSeconds) {
-        Logger.info(`Auto-expire: Media played for ${Math.round(playDuration)}s (threshold: ${settings.autoExpireSeconds}s), not resuming`);
-        // Put it back in the stack so user can manually resume
-        this.pausedStack.unshift(toResume);
-        this.broadcastUpdate();
-        return;
-      }
     }
 
     Logger.info(`Scheduling resume of "${toResume.title}" in ${settings.resumeDelay}ms`);
@@ -741,7 +741,6 @@ class MediaManager {
       } else if (action === AUTOSTOP.ACTION.PAUSE) {
         // IMPORTANT: Update state BEFORE sending pause command to avoid race condition
         // (content script will send MEDIA_PAUSE back, which could trigger auto-resume)
-        let shouldTryResume = false;
         let stoppedMedia = null;
 
         if (this.activeMedia &&
@@ -763,12 +762,6 @@ class MediaManager {
             manuallyPaused: true  // User paused via popup = manual
           });
           this.activeMedia = null;
-
-          // Check if we should try to resume previous media
-          const settings = window.storageManager.get();
-          if (settings.resumeOnManualPause) {
-            shouldTryResume = true;
-          }
         }
 
         // Now send the pause command (after state is already updated)
@@ -779,11 +772,9 @@ class MediaManager {
           frameId
         });
 
-        // Try to resume previous media if setting is enabled
-        if (shouldTryResume) {
-          Logger.info('resumeOnManualPause is enabled, trying to resume previous media');
-          await this.scheduleResumePrevious(null, stoppedMedia);
-        }
+        // Always call scheduleResumePrevious - it handles auto-expire AND resumeOnManualPause
+        // Pass wasManualPause=true since this is a user action from popup
+        await this.scheduleResumePrevious(null, stoppedMedia, true);
       } else if (action === AUTOSTOP.ACTION.SKIP) {
         await browser.tabs.sendMessage(tabId, {
           type: AUTOSTOP.MSG.CONTROL,
