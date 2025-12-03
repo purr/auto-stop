@@ -3,7 +3,7 @@
 A Firefox extension that ensures only one media plays at a time across all your tabs. When new media starts playing, it automatically pauses other media. When you stop the current media, it resumes the previously paused one.
 
 ![Auto-Stop Media](https://img.shields.io/badge/Firefox-Extension-FF7139?logo=firefox-browser&logoColor=white)
-![Version](https://img.shields.io/badge/version-1.1.5-blue)
+![Version](https://img.shields.io/badge/version-1.1.9-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 ## ✨ Features
