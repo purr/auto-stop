@@ -274,7 +274,24 @@ class MediaManager {
       Logger.debug('Cleaned up', prevStackLength - this.pausedStack.length, 'entries from paused stack');
     }
 
-    // Set as active with timestamp
+    // Check if this is already the active media (just a heartbeat/update)
+    const isSameMedia = this.activeMedia &&
+                        this.activeMedia.tabId === tabId &&
+                        this.activeMedia.frameId === frameId &&
+                        this.activeMedia.mediaId === data.mediaId;
+
+    if (isSameMedia) {
+      // Just update the heartbeat and metadata, keep startedAt intact
+      this.activeMedia.lastHeartbeat = Date.now();
+      this.activeMedia.title = data.title || this.activeMedia.title;
+      this.activeMedia.cover = data.cover || this.activeMedia.cover;
+      this.activeMedia.duration = data.duration || this.activeMedia.duration;
+      this.activeMedia.currentTime = data.currentTime || this.activeMedia.currentTime;
+      Logger.debug('Heartbeat from active media:', this.activeMedia.title);
+      return; // Don't broadcast update for heartbeats
+    }
+
+    // This is NEW media becoming active - set startedAt
     this.activeMedia = {
       tabId,
       frameId,
@@ -286,8 +303,8 @@ class MediaManager {
       cover: data.cover || '',
       duration: data.duration || 0,
       currentTime: data.currentTime || 0,
-      startedAt: Date.now(), // Track when this media started playing
-      lastHeartbeat: Date.now() // Track last time we heard from this media
+      startedAt: Date.now(), // Track when this NEW media started playing
+      lastHeartbeat: Date.now()
     };
 
     Logger.success('Now playing:', this.activeMedia.title);
