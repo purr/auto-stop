@@ -1,6 +1,14 @@
 // Auto-Stop Media - Popup Script
 // Handles the extension popup UI: displays media state, settings, and controls
 
+// =============================================================================
+// CONFIGURATION - Easy to modify values
+// =============================================================================
+const POPUP_CONFIG = {
+  STATE_POLL_INTERVAL: 2000,     // Backup polling interval for state updates (ms)
+  CONTROL_FEEDBACK_DELAY: 200   // Delay before fetching state after control action (ms)
+};
+
 class PopupController {
   constructor() {
     this.state = {
@@ -37,7 +45,7 @@ class PopupController {
     });
 
     // Backup poll in case messages are missed
-    setInterval(() => this.fetchState(), 2000);
+    setInterval(() => this.fetchState(), POPUP_CONFIG.STATE_POLL_INTERVAL);
   }
 
   async fetchState() {
@@ -193,7 +201,7 @@ class PopupController {
         }
       });
       // Refresh state after control action
-      setTimeout(() => this.fetchState(), 200);
+      setTimeout(() => this.fetchState(), POPUP_CONFIG.CONTROL_FEEDBACK_DELAY);
     } catch (e) {
       console.log('Failed to control media:', e);
     }
@@ -619,6 +627,7 @@ class PopupController {
     const itemTitle = document.createElement('div');
     itemTitle.className = 'item-title';
     itemTitle.textContent = media.title || 'Unknown';
+    itemTitle.title = media.manuallyPaused ? "Manually paused - won't auto-resume" : '';
     itemInfo.appendChild(itemTitle);
 
     const itemSource = document.createElement('div');
@@ -645,7 +654,7 @@ class PopupController {
     // Play button
     const playBtn = document.createElement('button');
     playBtn.className = 'play-btn';
-    playBtn.title = media.manuallyPaused ? 'Resume (clears manual pause)' : 'Resume';
+    playBtn.title = 'Resume';
     const playSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     playSvg.setAttribute('viewBox', '0 0 24 24');
     playSvg.setAttribute('fill', 'currentColor');

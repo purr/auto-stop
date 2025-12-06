@@ -2,6 +2,15 @@
 // Handles SoundCloud's custom player
 // Reference: https://github.com/JohannesFischer/soundcloud-control
 
+// =============================================================================
+// CONFIGURATION - Easy to modify values
+// =============================================================================
+const SOUNDCLOUD_CONFIG = {
+  PLAYER_CHECK_RETRY: 500,       // Delay before retrying player check (ms)
+  POLL_INTERVAL: 300,            // How often to poll for state changes (ms)
+  TIME_UPDATE_THROTTLE: 500      // Minimum time between time update messages (ms)
+};
+
 class SoundCloudAdapter extends BaseAdapter {
   constructor() {
     super();
@@ -34,7 +43,7 @@ class SoundCloudAdapter extends BaseAdapter {
         Logger.success('SoundCloud: Player found');
         this.setupPlayer();
       } else {
-        setTimeout(checkPlayer, 500);
+        setTimeout(checkPlayer, SOUNDCLOUD_CONFIG.PLAYER_CHECK_RETRY);
       }
     };
 
@@ -99,9 +108,9 @@ class SoundCloudAdapter extends BaseAdapter {
           stored.info = this.getMediaInfo(null, this.currentMediaId);
         }
 
-        // Send time updates when playing (every ~500ms)
+        // Send time updates when playing
         const now = Date.now();
-        if (this.isPlaying && now - lastTimeUpdate > 500) {
+        if (this.isPlaying && now - lastTimeUpdate > SOUNDCLOUD_CONFIG.TIME_UPDATE_THROTTLE) {
           lastTimeUpdate = now;
           this.sendTimeUpdate(
             this.currentMediaId,
@@ -111,7 +120,7 @@ class SoundCloudAdapter extends BaseAdapter {
           );
         }
       }
-    }, 300); // Poll every 300ms
+    }, SOUNDCLOUD_CONFIG.POLL_INTERVAL);
   }
 
   observePlayState() {

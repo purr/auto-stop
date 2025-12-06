@@ -1,22 +1,32 @@
 // Auto-Stop Media - Desktop Connector
 // Handles WebSocket connection to Windows service for desktop media control
 
+// =============================================================================
+// CONFIGURATION - Easy to modify values
+// =============================================================================
+const DESKTOP_CONFIG = {
+  WS_URL: 'ws://127.0.0.1:42089',       // WebSocket server address
+  MAX_RECONNECT_ATTEMPTS: 10,            // Max reconnection attempts before backing off
+  RECONNECT_DELAY_BASE: 1000,            // Base delay between reconnects (ms)
+  RECONNECT_DELAY_MAX: 30000,            // Maximum reconnect delay (ms)
+  CONNECTION_CHECK_INTERVAL: 10000,      // How often to check connection status (ms)
+  PAUSE_DEBOUNCE_DELAY: 2000,            // Delay before confirming desktop stopped (ms)
+  PING_INTERVAL: 15000,                  // How often to send ping (ms)
+  PING_TIMEOUT: 5000                     // How long to wait for pong (ms)
+};
+
 class DesktopConnector {
   constructor(mediaManager) {
     this.mediaManager = mediaManager;
     this.ws = null;
     this.connected = false;
     this.reconnectAttempts = 0;
-    this.maxReconnectAttempts = 10;
-    this.reconnectDelay = 1000;
+    this.maxReconnectAttempts = DESKTOP_CONFIG.MAX_RECONNECT_ATTEMPTS;
+    this.reconnectDelay = DESKTOP_CONFIG.RECONNECT_DELAY_BASE;
     this.reconnectTimer = null;
     this.pingInterval = null;
     this.pingTimeout = null;
     this.lastPongTime = 0;
-    this._pauseDebounceTimer = null;
-    this._desktopPlayInProgress = false; // Flag to prevent false pauses during desktop startup
-    this._desktopLastActiveTime = 0; // Timestamp when desktop was last active
-    this._desktopPlayTimeout = null; // Timeout ID for clearing the play flag
 
     // Desktop media state
     this.desktopState = {
@@ -24,8 +34,11 @@ class DesktopConnector {
       pausedList: []
     };
 
+    // Debounce timer for desktop pause (prevents false triggers during transitions)
+    this._pauseDebounceTimer = null;
+
     // WebSocket server config
-    this.wsUrl = 'ws://127.0.0.1:42089';
+    this.wsUrl = DESKTOP_CONFIG.WS_URL;
   }
 
   /**
@@ -37,22 +50,19 @@ class DesktopConnector {
 
     // Periodically check connection and reconnect if needed
     setInterval(() => {
-      // Check if WebSocket is actually connected
       const wsConnected = this.ws && this.ws.readyState === WebSocket.OPEN;
 
-      // Update connected state based on actual WebSocket state
       if (this.connected && !wsConnected) {
         Logger.warn('WebSocket state mismatch - marking as disconnected');
         this.handleDisconnect();
       }
 
-      // Try to reconnect if not connected
       if (!wsConnected && !this.reconnectTimer) {
         Logger.debug('Periodic reconnect check - attempting connection');
-        this.reconnectAttempts = 0; // Reset attempts for periodic check
+        this.reconnectAttempts = 0;
         this.connect();
       }
-    }, 10000); // Check every 10 seconds
+    }, DESKTOP_CONFIG.CONNECTION_CHECK_INTERVAL);
   }
 
   /**
@@ -73,10 +83,9 @@ class DesktopConnector {
         this.connected = true;
         this.reconnectAttempts = 0;
 
-        // Start ping interval
         this.startPing();
 
-        // Register browser info so service can filter it out
+        // Register browser
         this.send({
           type: 'REGISTER_BROWSER',
           data: {
@@ -85,13 +94,12 @@ class DesktopConnector {
           }
         });
 
-        // Send current browser media state immediately
+        // Send current browser state
         this.sendBrowserState();
 
-        // Request initial state
+        // Request initial desktop state
         this.send({ type: 'GET_DESKTOP_STATE' });
 
-        // Notify media manager
         this.mediaManager.onDesktopConnected();
       };
 
@@ -100,9 +108,8 @@ class DesktopConnector {
         this.handleDisconnect();
       };
 
-      this.ws.onerror = (error) => {
+      this.ws.onerror = () => {
         Logger.debug('Desktop service connection error (service may not be running)');
-        // Don't log full error - it's expected when service isn't running
       };
 
       this.ws.onmessage = (event) => {
@@ -124,7 +131,6 @@ class DesktopConnector {
     this.stopPing();
     this.clearPauseDebounce();
 
-    // Close WebSocket if still exists
     if (this.ws) {
       try {
         this.ws.close();
@@ -132,10 +138,8 @@ class DesktopConnector {
       this.ws = null;
     }
 
-    // Clear desktop state
     this.desktopState = { activeMedia: null, pausedList: [] };
 
-    // Always notify media manager of disconnection (for UI update)
     if (wasConnected) {
       this.mediaManager.onDesktopDisconnected();
     }
@@ -143,7 +147,7 @@ class DesktopConnector {
     // Schedule reconnect
     if (this.reconnectAttempts < this.maxReconnectAttempts) {
       this.reconnectAttempts++;
-      const delay = Math.min(this.reconnectDelay * Math.pow(1.5, this.reconnectAttempts - 1), 30000);
+      const delay = Math.min(this.reconnectDelay * Math.pow(1.5, this.reconnectAttempts - 1), DESKTOP_CONFIG.RECONNECT_DELAY_MAX);
       Logger.debug(`Reconnecting in ${Math.round(delay / 1000)}s (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
 
       this.reconnectTimer = setTimeout(() => {
@@ -152,7 +156,7 @@ class DesktopConnector {
       }, delay);
     } else {
       Logger.debug('Max reconnect attempts reached. Will retry in 10s.');
-      this.reconnectAttempts = 0; // Reset for next cycle
+      this.reconnectAttempts = 0;
     }
   }
 
@@ -168,17 +172,10 @@ class DesktopConnector {
 
       switch (type) {
         case 'PONG':
-          // Heartbeat response - connection is alive
           this.lastPongTime = Date.now();
           if (this.pingTimeout) {
             clearTimeout(this.pingTimeout);
             this.pingTimeout = null;
-          }
-          // PONG may include global playing state for icon sync
-          if (data && data.globalPlaying !== undefined) {
-            // Service is telling us the global playing state
-            // This helps keep icons in sync
-            Logger.debug('PONG global playing state:', data.globalPlaying);
           }
           break;
 
@@ -202,186 +199,74 @@ class DesktopConnector {
     const prevActive = this.desktopState.activeMedia;
     const newActive = state.activeMedia;
 
-    // Store previous state for comparison
-    const prevState = this.desktopState;
     this.desktopState = state;
 
-    // Log state for debugging
     Logger.debug('Desktop state update:', {
       prevActive: prevActive?.title,
       newActive: newActive?.title,
-      pausedCount: state.pausedList?.length || 0,
-      playInProgress: this._desktopPlayInProgress
+      pausedCount: state.pausedList?.length || 0
     });
 
-    // CRITICAL: Set flag early if ANY desktop media exists (active or paused)
-    // This prevents false pauses during startup transitions
-    const hasDesktopMedia = newActive || (state.pausedList && state.pausedList.some(m => m.isDesktop));
-    if (hasDesktopMedia) {
-      // Always update timestamp when desktop media exists
-      this._desktopLastActiveTime = Date.now();
-
-      // Set flag if not already set, or extend it if already set
-      if (!this._desktopPlayInProgress) {
-        Logger.debug('Desktop media detected - setting play flag to prevent false pauses');
-        this._desktopPlayInProgress = true;
-      }
-
-      // Always reset/extend the timeout when desktop media exists
-      if (this._desktopPlayTimeout) {
-        clearTimeout(this._desktopPlayTimeout);
-      }
-      this._desktopPlayTimeout = setTimeout(() => {
-        this._desktopPlayInProgress = false;
-        Logger.debug('Desktop play flag cleared after timeout');
-      }, 10000); // 10 seconds to be very safe
-    }
-
-    // Notify media manager of changes
+    // Desktop media started playing
     if (newActive && !prevActive) {
-      // Desktop media started playing
-      Logger.media('Desktop media started', newActive);
+      // Cancel any pending pause notification - desktop is active!
       this.clearPauseDebounce();
-      // Set flag to prevent false pause during startup
-      this._desktopPlayInProgress = true;
-      // Update timestamp
-      this._desktopLastActiveTime = Date.now();
-      // Clear flag after a delay (desktop should be stable by then)
-      if (this._desktopPlayTimeout) {
-        clearTimeout(this._desktopPlayTimeout);
-      }
-      this._desktopPlayTimeout = setTimeout(() => {
-        this._desktopPlayInProgress = false;
-        Logger.debug('Desktop play flag cleared after timeout');
-      }, 10000); // 10 seconds
-      // IMPORTANT: Clear any pending resume that might have been triggered by a false pause
-      this.mediaManager.cancelPendingResume(false); // Don't put back in stack - desktop is playing now
-      // Also cancel any pending resume timeout
-      if (this.mediaManager._pendingResumeTimeout) {
-        clearTimeout(this.mediaManager._pendingResumeTimeout);
-        this.mediaManager._pendingResumeTimeout = null;
-        Logger.info('Cancelled pending browser resume timeout from desktop connector');
-      }
+      Logger.media('Desktop media started', newActive);
       this.mediaManager.onDesktopMediaPlay(newActive);
-    } else if (newActive && prevActive) {
-      // Desktop is still active - check if it's a different track or just an update
+    }
+    // Desktop still active - check for changes
+    else if (newActive && prevActive) {
+      // Cancel any pending pause notification - desktop is still active
+      this.clearPauseDebounce();
+
       const titleChanged = newActive.title !== prevActive.title;
       const mediaIdChanged = newActive.mediaId !== prevActive.mediaId;
       const isPlayingChanged = newActive.isPlaying !== prevActive.isPlaying;
 
-      // Update timestamp
-      this._desktopLastActiveTime = Date.now();
-
       if (titleChanged || mediaIdChanged) {
-        // Different track started - clear any pending pause
         Logger.media('Desktop media changed', newActive);
-        this.clearPauseDebounce();
         this.mediaManager.onDesktopMediaPlay(newActive);
       } else if (isPlayingChanged && !newActive.isPlaying) {
-        // Same track but stopped playing (manually paused or ended)
         Logger.media('Desktop media paused/ended', newActive);
         this.mediaManager.onDesktopMediaPause(newActive);
       } else {
-        // Same track - just update progress/metadata
+        // Just progress update
         if (this.mediaManager.activeMedia && this.mediaManager.activeMedia.mediaId === newActive.mediaId) {
           this.mediaManager.activeMedia.currentTime = newActive.currentTime || 0;
           this.mediaManager.activeMedia.duration = newActive.duration || 0;
           this.mediaManager.activeMedia.isPlaying = newActive.isPlaying;
           this.mediaManager.activeMedia.cover = newActive.cover || this.mediaManager.activeMedia.cover;
-          // Preserve manuallyPaused flag if it exists
-          if (newActive.manuallyPaused !== undefined) {
-            this.mediaManager.activeMedia.manuallyPaused = newActive.manuallyPaused;
-          }
-          Logger.debug('Desktop progress update:', {
-            currentTime: newActive.currentTime,
-            duration: newActive.duration,
-            isPlaying: newActive.isPlaying,
-            manuallyPaused: newActive.manuallyPaused
-          });
-        }
-      }
-    } else if (!newActive && prevActive) {
-      // Desktop media stopped - IMMEDIATELY clear active media (don't wait for debounce)
-      Logger.media('Desktop media stopped', prevActive);
-      this.mediaManager.onDesktopMediaPause(prevActive);
-
-      // Debounce to avoid false triggers during track changes
-      // BUT: Only debounce if we're not currently in the middle of a desktop play event
-      // AND if there's no desktop media anywhere (might be starting)
-      if (!this._desktopPlayInProgress && !hasDesktopMedia) {
-        Logger.debug('Desktop media stopped (debouncing additional actions)');
-        this.debouncedPause(prevActive);
-      } else {
-        if (this._desktopPlayInProgress) {
-          Logger.debug('Desktop media stopped - ignoring (play in progress)');
-        } else {
-          Logger.debug('Desktop media stopped - ignoring (desktop media exists, might be transitioning)');
         }
       }
     }
-
-    // Update desktop media in paused stack if it exists there
-    // This ensures manuallyPaused flag and other metadata stay in sync
-    if (state.pausedList && state.pausedList.length > 0) {
-      for (const pausedMedia of state.pausedList) {
-        if (pausedMedia.isDesktop) {
-          // Find and update this desktop media in the paused stack
-          const index = this.mediaManager.pausedStack.findIndex(m =>
-            m.isDesktop && m.mediaId === pausedMedia.mediaId
-          );
-          if (index !== -1) {
-            // Update the paused media with latest info (including manuallyPaused)
-            this.mediaManager.pausedStack[index] = {
-              ...this.mediaManager.pausedStack[index],
-              ...pausedMedia,
-              manuallyPaused: pausedMedia.manuallyPaused || false
-            };
-          }
-        }
-      }
+    // Desktop media stopped - debounce to avoid false triggers during transitions
+    else if (!newActive && prevActive) {
+      Logger.debug('Desktop media stopped - debouncing...');
+      this.debouncedPause(prevActive);
     }
 
-    // Always broadcast update to popup (for progress, cover, etc.)
     this.mediaManager.broadcastUpdate();
   }
 
   /**
-   * Debounce pause to avoid false triggers during track changes
+   * Debounce desktop pause to avoid false triggers during state transitions
    */
   debouncedPause(prevActive) {
-    // Clear any existing debounce
     this.clearPauseDebounce();
 
-    // Wait 4 seconds before considering it a real pause
-    // Track changes in Spotify etc. often have brief pauses
+    // Wait before confirming desktop stopped
+    // This handles brief gaps during track changes or app startup
     this._pauseDebounceTimer = setTimeout(() => {
       this._pauseDebounceTimer = null;
-      // Check current state - if still no active media AND not in play progress, it's a real pause
-      // Also check if there's ANY desktop media (active or paused) - might be starting/transitioning
-      // Also check if desktop was recently active (within last 5 seconds) - might be transitioning
-      const hasDesktopActive = !!this.desktopState.activeMedia;
-      const hasDesktopInPaused = this.desktopState.pausedList &&
-        this.desktopState.pausedList.some(m => m.isDesktop);
-      const hasAnyDesktopMedia = hasDesktopActive || hasDesktopInPaused;
-      const recentlyActive = (Date.now() - this._desktopLastActiveTime) < 5000; // Within last 5 seconds
 
-      if (!hasDesktopActive && !this._desktopPlayInProgress && !hasAnyDesktopMedia && !recentlyActive) {
+      // Double-check desktop is still not active
+      if (!this.desktopState.activeMedia) {
         Logger.media('Desktop media stopped (confirmed)', prevActive);
         this.mediaManager.onDesktopMediaPause(prevActive);
       } else {
-        if (this._desktopPlayInProgress) {
-          Logger.debug('Desktop pause cancelled - play in progress');
-        } else if (hasDesktopActive) {
-          Logger.debug('Desktop pause cancelled - desktop is active');
-        } else if (hasDesktopInPaused) {
-          Logger.debug('Desktop pause cancelled - desktop in paused list (might be starting)');
-        } else if (recentlyActive) {
-          Logger.debug('Desktop pause cancelled - desktop was recently active (might be transitioning)');
-        } else {
-          Logger.debug('Desktop pause cancelled - unknown reason');
-        }
+        Logger.debug('Desktop pause cancelled - desktop became active again');
       }
-    }, 4000); // Increased to 4 seconds for more stability
+    }, DESKTOP_CONFIG.PAUSE_DEBOUNCE_DELAY);
   }
 
   /**
@@ -405,7 +290,6 @@ class DesktopConnector {
     const hasActiveMedia = this.mediaManager.activeMedia !== null;
     const activeMedia = this.mediaManager.activeMedia;
 
-    // Send browser state sync message
     this.send({
       type: 'BROWSER_STATE_SYNC',
       data: {
@@ -424,7 +308,6 @@ class DesktopConnector {
    */
   send(message) {
     if (!this.connected || !this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      Logger.debug('Cannot send - not connected to desktop service');
       return false;
     }
 
@@ -438,7 +321,7 @@ class DesktopConnector {
   }
 
   /**
-   * Start ping interval with timeout detection
+   * Start ping interval
    */
   startPing() {
     this.stopPing();
@@ -451,7 +334,6 @@ class DesktopConnector {
         return;
       }
 
-      // Send ping
       const sent = this.send({ type: 'PING' });
       if (!sent) {
         Logger.warn('Failed to send ping');
@@ -459,17 +341,16 @@ class DesktopConnector {
         return;
       }
 
-      // Set timeout for pong response
       this.pingTimeout = setTimeout(() => {
         Logger.warn('Ping timeout - no pong received');
         this.handleDisconnect();
-      }, 5000); // 5 second timeout for pong
+      }, DESKTOP_CONFIG.PING_TIMEOUT);
 
-    }, 15000); // Ping every 15 seconds
+    }, DESKTOP_CONFIG.PING_INTERVAL);
   }
 
   /**
-   * Stop ping interval and timeout
+   * Stop ping interval
    */
   stopPing() {
     if (this.pingInterval) {
@@ -527,7 +408,6 @@ class DesktopConnector {
    * Get current desktop state
    */
   getState() {
-    // Verify actual connection state
     const actuallyConnected = this.connected && this.ws && this.ws.readyState === WebSocket.OPEN;
 
     return {
@@ -546,4 +426,3 @@ class DesktopConnector {
 
 // Make available globally
 window.DesktopConnector = DesktopConnector;
-

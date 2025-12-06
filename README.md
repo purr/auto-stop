@@ -3,8 +3,6 @@
 A Firefox extension that ensures only one media plays at a time across all your browser tabs **and desktop applications**. Stop multiple videos playing simultaneously, prevent audio conflicts, and auto-pause other tabs when you play media. Control desktop apps like Spotify and VLC from your browser. When new media starts playing, it automatically pauses other media. When you stop the current media, it resumes the previously paused one.
 
 ![Auto-Stop Media](https://img.shields.io/badge/Firefox-Extension-FF7139?logo=firefox-browser&logoColor=white)
-![Version](https://img.shields.io/badge/version-2.0.5-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
 ![Windows](https://img.shields.io/badge/Windows-10%2F11-0078D6?logo=windows&logoColor=white)
 
 ## ✨ Features
@@ -71,7 +69,7 @@ That's it! The extension will automatically detect and connect to the service.
 3. **Paused**: Shows all paused media
    - Click play on any item to resume it
    - Click the card to jump to that tab
-   - Items with a ⏸ badge were manually paused and won't auto-resume
+   - Items with a grey dot were manually paused and won't auto-resume
 
 4. **Settings**: Click the ⚙️ icon to customize behavior
 

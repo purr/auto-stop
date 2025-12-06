@@ -1,6 +1,16 @@
 // Auto-Stop Media - Generic Adapter
 // Handles standard HTML5 audio/video elements
 
+// =============================================================================
+// CONFIGURATION - Easy to modify values
+// =============================================================================
+const GENERIC_ADAPTER_CONFIG = {
+  SCAN_INTERVAL: 2000,           // How often to scan for new media elements (ms)
+  HEALTH_CHECK_INTERVAL: 1000,   // How often to run health check (ms)
+  DOM_MUTATION_DELAY: 100,       // Delay after DOM mutation before scanning (ms)
+  TIME_UPDATE_THROTTLE: 500      // Minimum time between time update messages (ms)
+};
+
 class GenericAdapter extends BaseAdapter {
   constructor() {
     super();
@@ -42,10 +52,10 @@ class GenericAdapter extends BaseAdapter {
     this.observeDOM();
 
     // Periodic scan as backup (registers new elements)
-    setInterval(() => this.scanForMedia(), 2000);
+    setInterval(() => this.scanForMedia(), GENERIC_ADAPTER_CONFIG.SCAN_INTERVAL);
 
     // Periodic health check (validates tracked elements, syncs playing state)
-    setInterval(() => this.healthCheck(), 1000);
+    setInterval(() => this.healthCheck(), GENERIC_ADAPTER_CONFIG.HEALTH_CHECK_INTERVAL);
   }
 
   hookMediaElement() {
@@ -77,7 +87,7 @@ class GenericAdapter extends BaseAdapter {
         if (shouldScan) break;
       }
       if (shouldScan) {
-        setTimeout(() => this.scanForMedia(), 100);
+        setTimeout(() => this.scanForMedia(), GENERIC_ADAPTER_CONFIG.DOM_MUTATION_DELAY);
       }
     });
 
@@ -245,8 +255,8 @@ class GenericAdapter extends BaseAdapter {
       if (!this.hasAudio(element)) return;
 
       const now = Date.now();
-      // Send update every 500ms for smooth display
-      if (now - lastTimeUpdate > 500) {
+      // Throttle time updates for smooth display
+      if (now - lastTimeUpdate > GENERIC_ADAPTER_CONFIG.TIME_UPDATE_THROTTLE) {
         lastTimeUpdate = now;
         this.sendMessage(AUTOSTOP.MSG.TIME_UPDATE, {
           mediaId,
