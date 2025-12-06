@@ -458,10 +458,25 @@ function Install-PythonPackage {
 
     if ($installedVersion) {
         try {
-            if ([Version]$installedVersion -ge [Version]$MinVersion) {
-                Write-ColorOutput " → " -Color "DarkGray" -NoNewline
-                Write-ColorOutput "already installed (v$installedVersion)" -Color "DarkGreen"
-                return $true
+            # Check if versions are date-based (YYYYMMDD format, like pycaw)
+            $isDateVersion = ($installedVersion -match '^\d{8}$') -and ($MinVersion -match '^\d{8}$')
+
+            if ($isDateVersion) {
+                # Compare as integers for date-based versions
+                $installedInt = [int]$installedVersion
+                $minInt = [int]$MinVersion
+                if ($installedInt -ge $minInt) {
+                    Write-ColorOutput " → " -Color "DarkGray" -NoNewline
+                    Write-ColorOutput "already installed (v$installedVersion)" -Color "DarkGreen"
+                    return $true
+                }
+            } else {
+                # Standard version comparison (X.Y.Z format)
+                if ([Version]$installedVersion -ge [Version]$MinVersion) {
+                    Write-ColorOutput " → " -Color "DarkGray" -NoNewline
+                    Write-ColorOutput "already installed (v$installedVersion)" -Color "DarkGreen"
+                    return $true
+                }
             }
         }
         catch {
@@ -483,12 +498,19 @@ function Install-PythonPackage {
         }
 
         if ($process.ExitCode -eq 0) {
+            # Get installed version after installation
+            $installedVersion = Get-InstalledPackageVersion -PackageName $PackageName
+
             # Clear the "installing..." and show success
             Write-ColorOutput "`r  ├─ " -Color "DarkGray" -NoNewline
             Write-ColorOutput "$Description " -Color "White" -NoNewline
             Write-ColorOutput "($PackageName)" -Color "DarkGray" -NoNewline
             Write-ColorOutput " → " -Color "DarkGray" -NoNewline
-            Write-ColorOutput "installed ✓                    " -Color "Green"
+            if ($installedVersion) {
+                Write-ColorOutput "installed (v$installedVersion)" -Color "Green"
+            } else {
+                Write-ColorOutput "installed ✓" -Color "Green"
+            }
             return $true
         } else {
             Write-ColorOutput " FAILED" -Color "Red"
