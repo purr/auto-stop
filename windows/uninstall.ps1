@@ -51,9 +51,47 @@ trap {
     Wait-ForExit 1
 }
 
+# ============================================================================
+# ADMIN ELEVATION
+# ============================================================================
+
+# Check if running as admin
+$isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+
+# Check if scheduled task exists and if we need admin to remove it
+$TaskName = "AutoStopMediaService"
+$task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+
+# If task exists and we're not admin, try to elevate
+if ($task -and -not $isAdmin) {
+    Write-Host "Requesting administrator privileges to remove scheduled task..." -ForegroundColor Yellow
+
+    # Try to use pwsh.exe (PowerShell 7) first, fall back to powershell.exe
+    $psExe = "pwsh.exe"
+    if (-not (Get-Command $psExe -ErrorAction SilentlyContinue)) {
+        $psExe = "powershell.exe"
+    }
+
+    # Build argument list
+    $argList = "-ExecutionPolicy Bypass -NoExit -File `"$PSCommandPath`""
+    if ($KeepLogs) { $argList += " -KeepLogs" }
+    if ($KeepConfig) { $argList += " -KeepConfig" }
+
+    try {
+        # Start elevated process
+        $proc = Start-Process -FilePath $psExe -ArgumentList $argList -Verb RunAs -PassThru
+        # Don't wait - let the elevated window handle itself
+        exit 0
+    }
+    catch {
+        Write-Host "Failed to elevate. Will attempt to remove task without admin (may fail)." -ForegroundColor Yellow
+        Write-Host "Press Enter to continue anyway, or Ctrl+C to cancel..." -ForegroundColor Yellow
+        $null = Read-Host
+    }
+}
+
 # Configuration
 $AppName = "AutoStopMedia"
-$TaskName = "AutoStopMediaService"
 $InstallDir = Join-Path $env:APPDATA $AppName
 
 # Colors for output
@@ -116,7 +154,10 @@ Write-ColorOutput @"
 
 Write-Step "Stopping service..."
 
-$task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+# Re-check task (in case it was removed or doesn't exist)
+if (-not $task) {
+    $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+}
 
 if ($task) {
     if ($task.State -eq "Running") {
@@ -136,7 +177,7 @@ if ($task) {
 
 # Kill any remaining Python processes running our script
 $mainPy = Join-Path $InstallDir "service\main.py"
-Get-Process python*, py* -ErrorAction SilentlyContinue | ForEach-Object {
+Get-Process -Name "python*", "pythonw*" -ErrorAction SilentlyContinue | ForEach-Object {
     try {
         $cmdLine = (Get-CimInstance Win32_Process -Filter "ProcessId = $($_.Id)").CommandLine
         if ($cmdLine -and $cmdLine -like "*$mainPy*") {
