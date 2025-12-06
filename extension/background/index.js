@@ -8,6 +8,14 @@
   // Initialize storage
   await window.storageManager.load();
 
+  // Initialize desktop connector
+  const desktopConnector = new window.DesktopConnector(window.mediaManager);
+  window.mediaManager.setDesktopConnector(desktopConnector);
+  window.desktopConnector = desktopConnector;
+
+  // Start desktop connector (will auto-reconnect if service isn't running)
+  desktopConnector.init();
+
   // Message handler
   browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const tabId = sender.tab?.id;

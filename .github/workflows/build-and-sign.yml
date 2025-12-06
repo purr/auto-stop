@@ -7,7 +7,7 @@ on:
       - main
       - master
     paths:
-      - 'src/manifest.json'
+      - 'extension/manifest.json'
 
 permissions:
   contents: write
@@ -30,11 +30,11 @@ jobs:
         id: version_check
         run: |
           # Get current version
-          CURRENT_VERSION=$(jq -r '.version' src/manifest.json)
+          CURRENT_VERSION=$(jq -r '.version' extension/manifest.json)
           echo "Current version: $CURRENT_VERSION"
 
           # Get previous version (from previous commit)
-          git show HEAD~1:src/manifest.json > /tmp/old_manifest.json 2>/dev/null || echo '{"version":"0.0.0"}' > /tmp/old_manifest.json
+          git show HEAD~1:extension/manifest.json > /tmp/old_manifest.json 2>/dev/null || echo '{"version":"0.0.0"}' > /tmp/old_manifest.json
           PREVIOUS_VERSION=$(jq -r '.version' /tmp/old_manifest.json)
           echo "Previous version: $PREVIOUS_VERSION"
 
@@ -78,7 +78,7 @@ jobs:
 
       - name: Lint extension
         if: steps.version_check.outputs.should_build == 'true'
-        run: web-ext lint --source-dir=src --warnings-as-errors=false
+        run: web-ext lint --source-dir=extension --warnings-as-errors=false
 
       - name: Sign extension with Mozilla
         if: steps.version_check.outputs.should_build == 'true'
@@ -88,7 +88,7 @@ jobs:
         run: |
           echo "🔐 Signing extension with Mozilla..."
           web-ext sign \
-            --source-dir=src \
+            --source-dir=extension \
             --artifacts-dir=./signed \
             --channel=unlisted
 

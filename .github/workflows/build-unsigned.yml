@@ -25,17 +25,17 @@ jobs:
       - name: Get version from manifest
         id: get_version
         run: |
-          VERSION=$(jq -r '.version' src/manifest.json)
+          VERSION=$(jq -r '.version' extension/manifest.json)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "📦 Building version: $VERSION"
 
       - name: Lint extension
-        run: web-ext lint --source-dir=src --warnings-as-errors=false
+        run: web-ext lint --source-dir=extension --warnings-as-errors=false
 
       - name: Build XPI
         run: |
           mkdir -p build
-          cd src
+          cd extension
           zip -r ../build/auto_stop_media-${{ steps.get_version.outputs.version }}.xpi . -x "*.git*"
           cd ..
           echo "✅ Built extension:"

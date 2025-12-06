@@ -218,8 +218,54 @@ class PopupController {
 
   render() {
     this.renderSettings();
+    this.renderDesktopStatus();
     this.renderActiveMedia();
     this.renderPausedStack();
+  }
+
+  /**
+   * Check if media is from desktop
+   */
+  isDesktopMedia(media) {
+    return media && (media.isDesktop || (media.mediaId && media.mediaId.startsWith('desktop-')));
+  }
+
+  /**
+   * Render desktop connection status (only shown when connected)
+   */
+  renderDesktopStatus() {
+    let statusEl = document.getElementById('desktopStatus');
+    const isConnected = this.state.desktopConnected;
+
+    // Only show when connected
+    if (!isConnected) {
+      if (statusEl) {
+        statusEl.remove();
+      }
+      return;
+    }
+
+    // Create if doesn't exist
+    if (!statusEl) {
+      statusEl = document.createElement('div');
+      statusEl.id = 'desktopStatus';
+      statusEl.className = 'desktop-status connected';
+
+      const icon = document.createElement('span');
+      icon.className = 'status-icon';
+      statusEl.appendChild(icon);
+
+      const text = document.createElement('span');
+      text.className = 'status-text';
+      text.textContent = 'Desktop';
+      statusEl.appendChild(text);
+
+      statusEl.title = 'Connected to Windows media service';
+
+      // Insert before settings button in header
+      const settingsBtn = document.getElementById('settingsBtn');
+      settingsBtn.parentNode.insertBefore(statusEl, settingsBtn);
+    }
   }
 
   renderSettings() {
@@ -363,38 +409,68 @@ class PopupController {
       coverEl.appendChild(this.createMusicNoteSvg('cover-placeholder'));
     }
 
-    // Type badge - show "RESUMING" or "FADING IN" when pending
+    // Desktop media - icon is shown in favicon spot (see below)
+    const isDesktop = this.isDesktopMedia(displayMedia);
+
+    // Type badge - show "RESUMING", "FADING IN", or "DESKTOP" when applicable
     const typeBadge = document.getElementById('activeTypeBadge');
+    typeBadge.classList.remove('pending-badge', 'desktop-badge');
     if (isPending) {
       typeBadge.textContent = isFadingIn ? 'FADING IN' : 'RESUMING...';
       typeBadge.classList.add('pending-badge');
+    } else if (isDesktop) {
+      typeBadge.textContent = displayMedia.appId || 'DESKTOP';
+      typeBadge.classList.add('desktop-badge');
     } else {
       typeBadge.textContent = (mediaInfo?.mediaType || 'media').toUpperCase();
-      typeBadge.classList.remove('pending-badge');
     }
 
     // Title
     document.getElementById('activeTitle').textContent = displayMedia.title || 'Unknown';
 
-    // Source
+    // Source / Favicon (show desktop icon for desktop media in the exact favicon position)
     const favicon = document.getElementById('activeFavicon');
-    if (displayMedia.favicon) {
-      favicon.src = displayMedia.favicon;
-      favicon.classList.add('visible');
-    } else {
+    const faviconContainer = favicon.parentElement;
+
+    // Remove any existing desktop icon
+    const existingDesktopFavicon = faviconContainer.querySelector('.desktop-favicon');
+    if (existingDesktopFavicon) {
+      existingDesktopFavicon.remove();
+    }
+
+    if (isDesktop) {
+      // Hide the favicon and show desktop icon in the exact same position (using favicon-overlay class)
       favicon.classList.remove('visible');
+      const desktopFavicon = document.createElement('span');
+      desktopFavicon.className = 'desktop-favicon favicon-overlay visible';
+      desktopFavicon.appendChild(this.createDesktopSvg());
+      faviconContainer.appendChild(desktopFavicon);
+    } else {
+      if (displayMedia.favicon) {
+        favicon.src = displayMedia.favicon;
+        favicon.classList.add('visible');
+      } else {
+        favicon.classList.remove('visible');
+      }
     }
 
     // Progress - use actual time from background (updated every 500ms by content script)
+    // Only show progress bar if we have real duration data
     const currentTime = displayMedia.currentTime || 0;
     const duration = displayMedia.duration || 0;
+    const progressContainer = document.querySelector('.media-progress');
 
-    const progress = duration > 0
-      ? Math.min((currentTime / duration) * 100, 100)
-      : 0;
-    document.getElementById('activeProgress').style.width = `${progress}%`;
-    document.getElementById('activeCurrentTime').textContent = this.formatTime(currentTime);
-    document.getElementById('activeDuration').textContent = this.formatTime(duration);
+    if (duration > 0) {
+      // Show progress bar with real data
+      progressContainer.style.display = 'flex';
+      const progress = Math.min((currentTime / duration) * 100, 100);
+      document.getElementById('activeProgress').style.width = `${progress}%`;
+      document.getElementById('activeCurrentTime').textContent = this.formatTime(currentTime);
+      document.getElementById('activeDuration').textContent = this.formatTime(duration);
+    } else {
+      // Hide progress bar if no real duration available
+      progressContainer.style.display = 'none';
+    }
 
     // Play/Pause button - show pause icon if playing, play icon if paused
     const playPauseBtn = document.getElementById('activePlayPauseBtn');
@@ -516,6 +592,8 @@ class PopupController {
     item.className = `media-list-item ${media.manuallyPaused ? 'manually-paused' : ''}`;
     item.dataset.mediaId = media.mediaId;
 
+    const isDesktop = this.isDesktopMedia(media);
+
     // Status dot
     const statusDot = document.createElement('div');
     statusDot.className = `status-dot ${media.manuallyPaused ? 'manual' : 'paused'}`;
@@ -541,25 +619,24 @@ class PopupController {
     const itemTitle = document.createElement('div');
     itemTitle.className = 'item-title';
     itemTitle.textContent = media.title || 'Unknown';
-    if (media.manuallyPaused) {
-      const badge = document.createElement('span');
-      badge.className = 'manual-badge';
-      badge.title = "Manually paused - won't auto-resume";
-      badge.textContent = '⏸';
-      itemTitle.appendChild(badge);
-    }
     itemInfo.appendChild(itemTitle);
 
     const itemSource = document.createElement('div');
     itemSource.className = 'item-source';
-    if (media.favicon) {
+    if (isDesktop) {
+      // Show desktop icon as favicon
+      const desktopFavicon = document.createElement('span');
+      desktopFavicon.className = 'desktop-favicon';
+      desktopFavicon.appendChild(this.createDesktopSvg());
+      itemSource.appendChild(desktopFavicon);
+    } else if (media.favicon) {
       const favicon = document.createElement('img');
       favicon.src = media.favicon;
       favicon.alt = '';
       itemSource.appendChild(favicon);
     }
     const sourceSpan = document.createElement('span');
-    sourceSpan.textContent = this.getSourceName(media.url);
+    sourceSpan.textContent = isDesktop ? (media.appId || 'Desktop') : this.getSourceName(media.url);
     itemSource.appendChild(sourceSpan);
     itemInfo.appendChild(itemSource);
 
@@ -615,6 +692,47 @@ class PopupController {
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     path.setAttribute('d', 'M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z');
     svg.appendChild(path);
+    return svg;
+  }
+
+  /**
+   * Create a desktop/monitor SVG icon
+   * @returns {SVGElement}
+   */
+  createDesktopSvg() {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '2');
+    svg.setAttribute('stroke-linecap', 'round');
+    svg.setAttribute('stroke-linejoin', 'round');
+
+    // Monitor outline
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.setAttribute('x', '2');
+    rect.setAttribute('y', '3');
+    rect.setAttribute('width', '20');
+    rect.setAttribute('height', '14');
+    rect.setAttribute('rx', '2');
+    rect.setAttribute('ry', '2');
+    svg.appendChild(rect);
+
+    // Stand
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', '8');
+    line.setAttribute('y1', '21');
+    line.setAttribute('x2', '16');
+    line.setAttribute('y2', '21');
+    svg.appendChild(line);
+
+    const line2 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line2.setAttribute('x1', '12');
+    line2.setAttribute('y1', '17');
+    line2.setAttribute('x2', '12');
+    line2.setAttribute('y2', '21');
+    svg.appendChild(line2);
+
     return svg;
   }
 }

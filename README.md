@@ -1,13 +1,15 @@
 # Auto-Stop Media 🎵
 
-A Firefox extension that ensures only one media plays at a time across all your tabs. When new media starts playing, it automatically pauses other media. When you stop the current media, it resumes the previously paused one.
+A Firefox extension that ensures only one media plays at a time across all your browser tabs **and desktop applications**. When new media starts playing, it automatically pauses other media. When you stop the current media, it resumes the previously paused one.
 
 ![Auto-Stop Media](https://img.shields.io/badge/Firefox-Extension-FF7139?logo=firefox-browser&logoColor=white)
-![Version](https://img.shields.io/badge/version-1.1.9-blue)
+![Version](https://img.shields.io/badge/version-2.0.0-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
+![Windows](https://img.shields.io/badge/Windows-10%2F11-0078D6?logo=windows&logoColor=white)
 
 ## ✨ Features
 
+### Browser Media
 - **Single Media Focus**: Only one audio/video plays at a time across all tabs
 - **Auto-Resume**: When you stop current media, the previously paused one automatically resumes
 - **Smart Detection**: Works with native HTML5 audio/video and most embedded players (YouTube, SoundCloud, Spotify Web, etc.)
@@ -24,9 +26,18 @@ A Firefox extension that ensures only one media plays at a time across all your 
 - **Manual Pause Tracking**: Manually paused media shows a badge and won't auto-resume (configurable)
 - **Pending Resume Indicator**: Visual feedback when media is about to resume (pulsing card during delay)
 
+### 🖥️ Desktop Media (Windows)
+- **Desktop App Integration**: Control Spotify, VLC, Windows Media Player, and more from the browser popup
+- **Unified Experience**: Desktop media appears alongside browser media with a 🖥️ icon
+- **Cross-Platform Pause**: Playing browser media automatically pauses desktop apps (and vice versa)
+- **Full Metadata**: See cover art, titles, and artist info from desktop apps
+- **Playback Controls**: Play, Pause, Next, Previous buttons work for desktop apps too
+
 ## 📦 Installation
 
-### Method 1: Install Signed XPI (Recommended)
+### Browser Extension
+
+#### Method 1: Install Signed XPI (Recommended)
 
 1. Go to the [Releases](../../releases) page
 2. Download the latest `.xpi` file
@@ -34,7 +45,7 @@ A Firefox extension that ensures only one media plays at a time across all your 
 4. Click **"Add"** when prompted
 5. Done! The extension is permanently installed
 
-### Method 2: Temporary Load (Development)
+#### Method 2: Temporary Load (Development)
 
 For development/testing, you can load the extension temporarily:
 
@@ -42,10 +53,32 @@ For development/testing, you can load the extension temporarily:
 2. Type `about:debugging` in the address bar and press Enter
 3. Click **"This Firefox"** in the left sidebar
 4. Click **"Load Temporary Add-on..."**
-5. Navigate to the `auto-stop/src` folder and select the `manifest.json` file
+5. Navigate to the `auto-stop/extension` folder and select the `manifest.json` file
 6. The extension will be loaded and active!
 
 > ⚠️ **Note**: Temporary extensions are removed when Firefox closes. You'll need to reload it each session.
+
+### Windows Desktop Service (Optional)
+
+To enable desktop media control (Spotify, VLC, etc.):
+
+**Requirements:**
+- Windows 10 or 11
+- Python 3.9 or higher (in PATH)
+
+**Installation:**
+
+1. Open PowerShell
+2. Navigate to the windows folder:
+   ```powershell
+   cd path\to\auto-stop\windows
+   ```
+3. Run the installer:
+   ```powershell
+   .\install.ps1
+   ```
+
+The installer will set up the service to run automatically at login. See [windows/README.md](windows/README.md) for detailed instructions.
 
 ## 🎮 How to Use
 
@@ -54,9 +87,12 @@ For development/testing, you can load the extension temporarily:
    - ⏮ Previous (seek to start), ▶/⏸ Play/Pause, ⏭ Next (skip to end)
    - Click the card to switch to that tab
    - Shows "Waiting..." or "Resuming..." when media is about to auto-resume
+   - Desktop media shows a 🖥️ icon and the app name
 3. **Paused**: Shows media that was paused (click play to resume, click card to focus tab)
    - Items with ⏸ badge were manually paused and won't auto-resume
+   - Desktop media shows a small 🖥️ badge
    - Scrollable list with shadow indicators when there's more content
+4. **Desktop Status**: Header shows "Desktop" when Windows service is connected
 
 ### Settings
 
@@ -87,6 +123,8 @@ Click the ⚙️ icon in the popup to access settings:
 
 ## 🔧 How It Works
 
+### Browser Media
+
 1. **Adapter System**: Site-specific adapters handle different player implementations
    - **Generic Adapter**: Hooks into `HTMLMediaElement.prototype.play()` to catch all standard HTML5 media
    - **SoundCloud Adapter**: Interacts with SoundCloud's custom player controls directly
@@ -110,6 +148,23 @@ Click the ⚙️ icon in the popup to access settings:
 
 5. **Blacklist** domains get priority - they're never paused and don't appear in the popup
 
+### Desktop Media
+
+1. **Windows Service** (`main.py`) runs as a background process
+2. **WebSocket Server** listens on `ws://127.0.0.1:42089`
+3. **Extension** connects to the WebSocket automatically
+4. **Windows Media API** (`winsdk`) detects and controls desktop apps
+
+When browser media starts:
+- Extension notifies the Windows service
+- Service pauses all desktop media
+- Desktop media appears in the paused stack
+
+When desktop media starts:
+- Service notifies the extension
+- Extension pauses browser media
+- Desktop media shows in "Now Playing" with a 🖥️ icon
+
 ## 📁 Project Structure
 
 ```
@@ -117,13 +172,15 @@ auto-stop/
 ├── .github/
 │   └── workflows/
 │       └── build-and-sign.yml    # GitHub Actions workflow for building & signing
-├── src/                          # Extension source code
-│   ├── manifest.json             # Extension manifest
+│
+├── extension/                    # Firefox extension source code
+│   ├── manifest.json             # Extension manifest (v2.0.0)
 │   ├── shared/
 │   │   └── constants.js          # Shared constants, message types & Logger
 │   ├── background/
 │   │   ├── index.js              # Background entry point
-│   │   ├── media-manager.js      # Media state management (pause/resume logic)
+│   │   ├── media-manager.js      # Media state management (browser + desktop)
+│   │   ├── desktop-connector.js  # WebSocket client for Windows service
 │   │   └── storage.js            # Settings storage
 │   ├── content/
 │   │   ├── index.js              # Content script entry point
@@ -140,6 +197,18 @@ auto-stop/
 │   └── icons/
 │       ├── icon-active.svg       # Pause icon (‖) - shown when media is playing
 │       └── icon-idle.svg         # Play icon (▶) - shown when no media playing
+│
+├── windows/                      # Windows background service
+│   ├── install.ps1               # PowerShell installer (checks prereqs, creates task)
+│   ├── uninstall.ps1             # PowerShell uninstaller
+│   ├── requirements.txt          # Python dependencies
+│   ├── README.md                 # Windows-specific documentation
+│   └── service/
+│       ├── main.py               # Service entry point (with watchdog)
+│       ├── media_manager.py      # Windows media session control
+│       ├── websocket_server.py   # WebSocket server
+│       └── config.py             # Configuration
+│
 ├── .gitignore
 └── README.md
 ```
@@ -148,7 +217,7 @@ auto-stop/
 
 To add support for a new site with a custom player:
 
-1. Create a new file in `src/content/adapters/` (e.g., `spotify-adapter.js`)
+1. Create a new file in `extension/content/adapters/` (e.g., `spotify-adapter.js`)
 2. Extend `BaseAdapter` class
 3. Implement `matches()` to detect the site (return `true` for matching hostnames)
 4. Set `priority` getter (higher = checked first, generic is 0)
@@ -159,18 +228,25 @@ To add support for a new site with a custom player:
    - `prev(mediaId)` - Go to previous/start (seeks to beginning)
    - `setVolume(mediaId, volume)` - Set volume (0-1)
 6. Optionally override `reRegisterElement(element)` for sites that recreate media elements
-7. Register in `src/content/adapters/index.js`
+7. Register in `extension/content/adapters/index.js`
 8. Add to `manifest.json` content scripts
 
 See `soundcloud-adapter.js` for a complete example of a site-specific adapter.
 
 ## 🐛 Known Limitations
 
+### Browser
 - Some sites with custom players may not be detected (we try our best!)
 - Embedded iframes with cross-origin restrictions may not be controllable
 - Cover art detection is best-effort and may not work on all sites
 - Sites that heavily recreate media elements may occasionally need a page refresh
 - Live streams may not report accurate duration
+
+### Desktop
+- Not all apps expose media session info to Windows
+- Some apps (like games) may not be controllable
+- Windows 10/11 only
+- Requires Python 3.9+
 
 ## 📋 TODO / Future Ideas
 
@@ -182,6 +258,7 @@ See `soundcloud-adapter.js` for a complete example of a site-specific adapter.
 - Playback history
 - Ignore media below a certain volume threshold
 - Ignore short media (< X seconds)
+- macOS/Linux desktop support
 
 ## 🔨 Building & Signing
 
@@ -216,7 +293,7 @@ The signed `.xpi` file will be available as a download in the workflow run or Gi
 npm install -g web-ext
 
 # Sign with Mozilla
-web-ext sign --source-dir=src --channel=unlisted
+web-ext sign --source-dir=extension --channel=unlisted
 
 # The signed .xpi will be in ./web-ext-artifacts/
 ```

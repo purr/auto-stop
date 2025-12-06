@@ -1,10 +1,10 @@
 // Auto-Stop Media - Media Manager
-// Manages media state across all tabs
+// Manages media state across all tabs and desktop apps
 
 class MediaManager {
   constructor() {
-    // Currently active media
-    this.activeMedia = null; // { tabId, frameId, mediaId, url, title, favicon, startedAt, lastHeartbeat, ... }
+    // Currently active media (browser OR desktop)
+    this.activeMedia = null; // { tabId, frameId, mediaId, url, title, favicon, startedAt, lastHeartbeat, isDesktop?, ... }
 
     // Stack of paused media (most recent first)
     // Each item has: { ...mediaInfo, manuallyPaused: boolean }
@@ -12,15 +12,32 @@ class MediaManager {
     // manuallyPaused = false means extension paused it, can auto-resume
     this.pausedStack = [];
 
-    // All known media elements
+    // All known media elements (browser only)
     this.allMedia = new Map(); // key: `${tabId}-${frameId}-${mediaId}`
 
     // Resume state management
     this.pendingResume = null;      // { timeoutId, media, fadeInterval }
     this.originalVolumes = new Map(); // mediaId -> original volume (0-1)
 
+    // Desktop connector (initialized in index.js)
+    this.desktopConnector = null;
+
     // Start periodic stale check
     this.startStaleCheck();
+  }
+
+  /**
+   * Set the desktop connector reference
+   */
+  setDesktopConnector(connector) {
+    this.desktopConnector = connector;
+  }
+
+  /**
+   * Check if a media item is desktop media
+   */
+  isDesktopMedia(media) {
+    return media && (media.isDesktop || (media.mediaId && media.mediaId.startsWith('desktop-')));
   }
 
   /**
@@ -57,6 +74,11 @@ class MediaManager {
    */
   async pingActiveMedia() {
     if (!this.activeMedia) return;
+
+    // Don't ping desktop media - it's managed by the desktop connector
+    if (this.isDesktopMedia(this.activeMedia)) {
+      return;
+    }
 
     const { tabId, frameId, mediaId } = this.activeMedia;
 
@@ -208,6 +230,12 @@ class MediaManager {
       return;
     }
 
+    // Check if this is already the active media (prevents repeated notifications)
+    const isAlreadyActive = this.activeMedia &&
+      this.activeMedia.tabId === tabId &&
+      this.activeMedia.frameId === frameId &&
+      this.activeMedia.mediaId === data.mediaId;
+
     // Update media info in allMedia
     if (this.allMedia.has(key)) {
       const media = this.allMedia.get(key);
@@ -220,6 +248,16 @@ class MediaManager {
       });
     }
 
+    // Notify desktop service that browser media is playing
+    // Only notify if this media is newly playing (not already active)
+    if (this.desktopConnector && !isAlreadyActive) {
+      this.desktopConnector.notifyBrowserMediaPlay({
+        mediaId: data.mediaId,
+        title: data.title || tab?.title || 'Unknown',
+        url
+      });
+    }
+
     // If there's already active media and it's not this one
     if (this.activeMedia &&
         !(this.activeMedia.tabId === tabId &&
@@ -228,12 +266,8 @@ class MediaManager {
 
       Logger.info('New media started, pausing previous:', this.activeMedia.title);
 
-      // Pause the previously active media
-      await this.pauseMedia(
-        this.activeMedia.tabId,
-        this.activeMedia.frameId,
-        this.activeMedia.mediaId
-      );
+      // Pause the previously active media (browser or desktop)
+      await this.pauseActiveMedia();
 
       // Add to paused stack with manuallyPaused = FALSE (extension paused it)
       // Remove if already there first
@@ -349,11 +383,81 @@ class MediaManager {
       );
       this.pausedStack.unshift(pausedMedia);
 
+      // Deduplicate to prevent duplicates
+      this._deduplicatePausedStack();
+
+      // CRITICAL: Check if desktop is in paused stack BEFORE clearing activeMedia
+      // This prevents browser from resuming when desktop is about to play
+      const desktopInPaused = this.pausedStack.some(m => m.isDesktop);
+
       this.activeMedia = null;
 
-      // Always call scheduleResumePrevious - it handles both auto-expire AND resumeOnManualPause
-      // Auto-expire takes priority: if media played too long, don't resume regardless of other settings
-      await this.scheduleResumePrevious(null, stoppedMedia, data.manual);
+      // Check again after clearing (desktop might have become active)
+      // Also check paused stack for desktop media
+      if (desktopInPaused) {
+        Logger.info('Desktop media in paused list - NOT scheduling browser resume (desktop might start)');
+        this.broadcastUpdate();
+        return;
+      }
+
+      // CRITICAL: Add a delay before resuming to give desktop time to register
+      // This prevents browser from resuming when desktop is starting to play
+      // Desktop might not be in paused stack yet, but might be starting
+      const resumeDelay = 1500; // 1.5 second delay to allow desktop state to update
+
+      // Check desktop state before scheduling resume
+      if (this.desktopConnector) {
+        const desktopState = this.desktopConnector.getState();
+        const desktopActive = desktopState.activeMedia;
+        const desktopPlayInProgress = this.desktopConnector._desktopPlayInProgress;
+        const desktopRecentlyActive = this.desktopConnector._desktopLastActiveTime;
+        const timeSinceDesktopActive = desktopRecentlyActive ? (Date.now() - desktopRecentlyActive) : Infinity;
+
+        // If desktop is active or about to be active, don't resume
+        if (desktopActive || desktopPlayInProgress || timeSinceDesktopActive < 5000) {
+          Logger.info('Desktop is active or starting - NOT scheduling browser resume');
+          this.broadcastUpdate();
+          return;
+        }
+
+        // Check if desktop media exists in paused list
+        if (desktopState.pausedList && desktopState.pausedList.length > 0) {
+          Logger.info('Desktop media in paused list (from connector) - NOT scheduling browser resume');
+          this.broadcastUpdate();
+          return;
+        }
+      }
+
+      // Schedule resume with a delay to allow desktop state to update
+      const resumeTimeoutId = setTimeout(async () => {
+        // Double-check desktop state before actually resuming
+        if (this.desktopConnector) {
+          const desktopState = this.desktopConnector.getState();
+          const desktopActive = desktopState.activeMedia;
+          const desktopPlayInProgress = this.desktopConnector._desktopPlayInProgress;
+          const desktopRecentlyActive = this.desktopConnector._desktopLastActiveTime;
+          const timeSinceDesktopActive = desktopRecentlyActive ? (Date.now() - desktopRecentlyActive) : Infinity;
+
+          if (desktopActive || desktopPlayInProgress || timeSinceDesktopActive < 3000) {
+            Logger.info('Desktop became active during delay - NOT resuming browser');
+            this.broadcastUpdate();
+            return;
+          }
+
+          // Check paused list again
+          if (desktopState.pausedList && desktopState.pausedList.length > 0) {
+            Logger.info('Desktop media appeared in paused list during delay - NOT resuming browser');
+            this.broadcastUpdate();
+            return;
+          }
+        }
+
+        // Final check in scheduleResumePrevious itself
+        await this.scheduleResumePrevious(null, stoppedMedia, data.manual);
+      }, resumeDelay);
+
+      // Store timeout ID so we can cancel it if desktop starts
+      this._pendingResumeTimeout = resumeTimeoutId;
     } else {
       // Media was paused but it wasn't the active one
       // Still add/update it in the paused stack if it exists in allMedia
@@ -499,6 +603,61 @@ class MediaManager {
     // Cancel any existing pending resume
     this.cancelPendingResume();
 
+    // CRITICAL: Check desktop connector state FIRST - this is the most up-to-date
+    // Check if desktop media is active or if desktop play is in progress
+    if (this.desktopConnector) {
+      const desktopState = this.desktopConnector.getState();
+      const desktopActive = desktopState.activeMedia;
+      const desktopPlayInProgress = this.desktopConnector._desktopPlayInProgress;
+      const desktopRecentlyActive = this.desktopConnector._desktopLastActiveTime;
+      const timeSinceDesktopActive = desktopRecentlyActive ? (Date.now() - desktopRecentlyActive) : Infinity;
+
+      // If desktop is active, don't resume browser
+      if (desktopActive) {
+        Logger.info('Desktop media is active (from connector) - NOT resuming browser media');
+        this.broadcastUpdate();
+        return;
+      }
+
+      // If desktop play is in progress (flag set), don't resume browser
+      if (desktopPlayInProgress) {
+        Logger.info('Desktop play in progress (flag set) - NOT resuming browser media');
+        this.broadcastUpdate();
+        return;
+      }
+
+      // If desktop was active within last 5 seconds, don't resume (might be transitioning)
+      if (timeSinceDesktopActive < 5000) {
+        Logger.info(`Desktop was active ${Math.round(timeSinceDesktopActive/1000)}s ago - NOT resuming browser (might be transitioning)`);
+        this.broadcastUpdate();
+        return;
+      }
+
+      // Check if desktop media exists in paused list (might be starting soon)
+      if (desktopState.pausedList && desktopState.pausedList.length > 0) {
+        Logger.info('Desktop media in paused list (from connector) - NOT resuming browser (desktop might start)');
+        this.broadcastUpdate();
+        return;
+      }
+    }
+
+    // CRITICAL: If desktop media is currently active, DO NOT resume browser media
+    // This prevents browser from resuming when desktop starts playing
+    if (this.activeMedia && this.activeMedia.isDesktop) {
+      Logger.info('Desktop media is active - NOT resuming browser media');
+      this.broadcastUpdate();
+      return;
+    }
+
+    // Also check if desktop media is in paused list (might be starting soon)
+    // Don't resume browser if desktop is about to play
+    const desktopInPaused = this.pausedStack.some(m => m.isDesktop);
+    if (desktopInPaused) {
+      Logger.info('Desktop media in paused list - NOT resuming browser (desktop might start)');
+      this.broadcastUpdate();
+      return;
+    }
+
     const settings = window.storageManager.get();
 
     // PRIORITY 1: Check auto-expire FIRST (takes precedence over all other settings)
@@ -562,6 +721,16 @@ class MediaManager {
     // Store that we're resuming this media
     if (this.pendingResume) {
       this.pendingResume.media = media;
+    }
+
+    // Desktop media - no fade-in, just play directly
+    if (this.isDesktopMedia(media)) {
+      Logger.debug('Resuming desktop media (no fade-in)');
+      if (this.desktopConnector) {
+        this.desktopConnector.controlDesktopMedia('play', mediaId);
+      }
+      this.pendingResume = null;
+      return;
     }
 
     const fadeDuration = settings.fadeInDuration;
@@ -690,7 +859,7 @@ class MediaManager {
   }
 
   /**
-   * Send pause command to a media element
+   * Send pause command to a media element (browser only)
    */
   async pauseMedia(tabId, frameId, mediaId) {
     const key = this.getMediaKey(tabId, frameId, mediaId);
@@ -712,12 +881,41 @@ class MediaManager {
   }
 
   /**
+   * Pause the currently active media (browser or desktop)
+   */
+  async pauseActiveMedia() {
+    if (!this.activeMedia) return;
+
+    if (this.isDesktopMedia(this.activeMedia)) {
+      // Pause desktop media via connector
+      if (this.desktopConnector) {
+        this.desktopConnector.controlDesktopMedia('pause', this.activeMedia.mediaId);
+      }
+    } else {
+      // Pause browser media
+      await this.pauseMedia(
+        this.activeMedia.tabId,
+        this.activeMedia.frameId,
+        this.activeMedia.mediaId
+      );
+    }
+  }
+
+  /**
    * Handle control command from popup
    */
   async controlMedia(data) {
     const { tabId, frameId, mediaId, action } = data;
 
     Logger.info('Popup control:', action, mediaId);
+
+    // Check if this is desktop media
+    const isDesktop = mediaId && mediaId.startsWith('desktop-');
+
+    if (isDesktop) {
+      await this.controlDesktopMedia(mediaId, action);
+      return;
+    }
 
     try {
       if (action === AUTOSTOP.ACTION.PLAY) {
@@ -798,6 +996,58 @@ class MediaManager {
   }
 
   /**
+   * Handle control command for desktop media
+   */
+  async controlDesktopMedia(mediaId, action) {
+    if (!this.desktopConnector) {
+      Logger.warn('Desktop connector not available');
+      return;
+    }
+
+    Logger.info('Desktop control:', action, mediaId);
+
+    if (action === AUTOSTOP.ACTION.PLAY) {
+      // Cancel any pending resume
+      this.cancelPendingResume();
+
+      // Remove from paused stack
+      const stackIndex = this.pausedStack.findIndex(m => m.mediaId === mediaId);
+      if (stackIndex !== -1) {
+        this.pausedStack.splice(stackIndex, 1);
+      }
+
+      this.desktopConnector.controlDesktopMedia('play', mediaId);
+
+    } else if (action === AUTOSTOP.ACTION.PAUSE) {
+      let stoppedMedia = null;
+
+      if (this.activeMedia && this.activeMedia.mediaId === mediaId) {
+        Logger.info('Manual pause of desktop media via popup');
+        stoppedMedia = { ...this.activeMedia };
+
+        // Add to paused stack
+        this.pausedStack = this.pausedStack.filter(m => m.mediaId !== mediaId);
+        this.pausedStack.unshift({
+          ...this.activeMedia,
+          manuallyPaused: true
+        });
+        this.activeMedia = null;
+      }
+
+      this.desktopConnector.controlDesktopMedia('pause', mediaId);
+      await this.scheduleResumePrevious(null, stoppedMedia, true);
+
+    } else if (action === AUTOSTOP.ACTION.SKIP) {
+      this.desktopConnector.controlDesktopMedia('skip', mediaId);
+
+    } else if (action === AUTOSTOP.ACTION.PREV) {
+      this.desktopConnector.controlDesktopMedia('prev', mediaId);
+    }
+
+    this.broadcastUpdate();
+  }
+
+  /**
    * Handle tab closed
    */
   async handleTabClosed(tabId) {
@@ -854,25 +1104,235 @@ class MediaManager {
   }
 
   /**
-   * Get current state
+   * Get current state (includes desktop media)
    */
   getState() {
+    // Get desktop state if available
+    const desktopState = this.desktopConnector?.getState() || { connected: false, activeMedia: null, pausedList: [] };
+
+    // Combine paused lists - browser first, then desktop
+    const combinedPausedStack = [
+      ...this.pausedStack,
+      ...(desktopState.pausedList || []).map(m => ({ ...m, manuallyPaused: false }))
+    ];
+
+    // Deduplicate the combined list
+    const seen = new Set();
+    const seenDesktopTitles = new Set();
+    const deduped = [];
+
+    for (const media of combinedPausedStack) {
+      let key;
+      let isDuplicate = false;
+
+      if (media.isDesktop) {
+        key = `desktop-${media.mediaId}`;
+        if (seen.has(key)) {
+          isDuplicate = true;
+        } else {
+          const titleKey = `desktop-${media.appId || 'unknown'}-${(media.title || '').toLowerCase().trim()}`;
+          if (seenDesktopTitles.has(titleKey)) {
+            isDuplicate = true;
+          } else {
+            seenDesktopTitles.add(titleKey);
+          }
+        }
+      } else {
+        key = `${media.tabId}-${media.frameId}-${media.mediaId}`;
+        if (seen.has(key)) {
+          isDuplicate = true;
+        }
+      }
+
+      if (!isDuplicate) {
+        seen.add(key);
+        deduped.push(media);
+      }
+    }
+
     return {
       activeMedia: this.activeMedia,
-      pausedStack: this.pausedStack,
+      pausedStack: deduped,
       allMedia: Array.from(this.allMedia.values()),
       settings: window.storageManager.get(),
       pendingResume: this.pendingResume ? {
         media: this.pendingResume.media,
         isFadingIn: this.pendingResume.fadeInterval !== null
-      } : null
+      } : null,
+      desktopConnected: desktopState.connected
     };
+  }
+
+  // ============================================================================
+  // DESKTOP MEDIA EVENT HANDLERS
+  // ============================================================================
+
+  /**
+   * Called when desktop connector connects
+   */
+  onDesktopConnected() {
+    Logger.success('Desktop service connected');
+    this.broadcastUpdate();
+  }
+
+  /**
+   * Called when desktop connector disconnects
+   */
+  onDesktopDisconnected() {
+    Logger.info('Desktop service disconnected');
+
+    // If active media was desktop, clear it
+    if (this.isDesktopMedia(this.activeMedia)) {
+      this.activeMedia = null;
+    }
+
+    // Remove desktop media from paused stack
+    this.pausedStack = this.pausedStack.filter(m => !this.isDesktopMedia(m));
+
+    this.broadcastUpdate();
+  }
+
+  /**
+   * Deduplicate paused stack - remove exact duplicates
+   */
+  _deduplicatePausedStack() {
+    const seen = new Set();
+    const seenDesktopTitles = new Set(); // For desktop media, also dedupe by title
+    const deduped = [];
+
+    for (const media of this.pausedStack) {
+      let key;
+      let isDuplicate = false;
+
+      if (media.isDesktop) {
+        // For desktop: use mediaId first, then fall back to title if same app
+        key = `desktop-${media.mediaId}`;
+        if (seen.has(key)) {
+          isDuplicate = true;
+        } else {
+          // Also check by title for same app (e.g., Spotify with different session IDs)
+          const titleKey = `desktop-${media.appId || 'unknown'}-${(media.title || '').toLowerCase().trim()}`;
+          if (seenDesktopTitles.has(titleKey)) {
+            Logger.debug('Removing duplicate desktop media by title:', media.title);
+            isDuplicate = true;
+          } else {
+            seenDesktopTitles.add(titleKey);
+          }
+        }
+      } else {
+        // For browser: use tabId-frameId-mediaId
+        key = `${media.tabId}-${media.frameId}-${media.mediaId}`;
+        if (seen.has(key)) {
+          isDuplicate = true;
+        }
+      }
+
+      if (!isDuplicate) {
+        seen.add(key);
+        deduped.push(media);
+      } else {
+        Logger.debug('Removing duplicate from paused stack:', media.title, `(key: ${key})`);
+      }
+    }
+
+    if (deduped.length !== this.pausedStack.length) {
+      Logger.info(`Deduplicated paused stack: ${this.pausedStack.length} -> ${deduped.length}`);
+      this.pausedStack = deduped;
+    }
+  }
+
+  /**
+   * Called when desktop media starts playing
+   */
+  async onDesktopMediaPlay(desktopMedia) {
+    Logger.media('Desktop play', desktopMedia);
+
+    // Cancel any pending resume timeout
+    if (this._pendingResumeTimeout) {
+      clearTimeout(this._pendingResumeTimeout);
+      this._pendingResumeTimeout = null;
+      Logger.info('Cancelled pending browser resume timeout - desktop is playing');
+    }
+
+    // Cancel any pending resume - desktop is playing now, don't resume browser
+    this.cancelPendingResume(false); // Don't put back in stack - desktop is taking over
+
+    // CRITICAL: Save the previous active media BEFORE pausing
+    // This prevents it from being lost if pause triggers events
+    const previousMedia = this.activeMedia ? { ...this.activeMedia } : null;
+
+    // If there's already active media (browser or other desktop), pause it
+    if (previousMedia && previousMedia.mediaId !== desktopMedia.mediaId) {
+      Logger.info('Desktop media started, pausing previous:', previousMedia.title);
+
+      // Remove from paused stack first (avoid duplicates)
+      this.pausedStack = this.pausedStack.filter(m =>
+        !(m.tabId === previousMedia.tabId &&
+          m.frameId === previousMedia.frameId &&
+          m.mediaId === previousMedia.mediaId)
+      );
+
+      // Pause the previously active media
+      await this.pauseActiveMedia();
+
+      // Add to paused stack AFTER pausing (using saved copy)
+      this.pausedStack.unshift({
+        ...previousMedia,
+        manuallyPaused: false  // Extension paused it, can auto-resume
+      });
+
+      Logger.info('Added previous media to paused stack:', previousMedia.title);
+    }
+
+    // Remove desktop from paused stack if it was there
+    this.pausedStack = this.pausedStack.filter(m => m.mediaId !== desktopMedia.mediaId);
+
+    // Deduplicate to prevent duplicates
+    this._deduplicatePausedStack();
+
+    // Set desktop as active
+    this.activeMedia = {
+      ...desktopMedia,
+      startedAt: Date.now(),
+      lastHeartbeat: Date.now()
+    };
+
+    Logger.success('Now playing (desktop):', this.activeMedia.title);
+    this.broadcastUpdate();
+  }
+
+  /**
+   * Called when desktop media pauses
+   */
+  async onDesktopMediaPause(desktopMedia) {
+    Logger.media('Desktop pause', desktopMedia);
+
+    // If this was the active media
+    if (this.activeMedia && this.activeMedia.mediaId === desktopMedia.mediaId) {
+      // Add to paused stack
+      this.pausedStack = this.pausedStack.filter(m => m.mediaId !== desktopMedia.mediaId);
+      this.pausedStack.unshift({
+        ...desktopMedia,
+        manuallyPaused: desktopMedia.manuallyPaused || false  // Preserve manual pause flag from service
+      });
+
+      this.activeMedia = null;
+
+      // DO NOT resume browser media when desktop stops
+      // User explicitly stopped desktop, so don't auto-resume
+      Logger.info('Desktop media stopped - NOT resuming browser (user stopped desktop)');
+    }
+
+    this.broadcastUpdate();
   }
 
   /**
    * Broadcast state update to popup
    */
   broadcastUpdate() {
+    // Deduplicate paused stack before broadcasting
+    this._deduplicatePausedStack();
+
     this.updateIcon();
 
     browser.runtime.sendMessage({
