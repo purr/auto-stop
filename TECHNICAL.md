@@ -202,6 +202,21 @@ The service installs to `%APPDATA%\AutoStopMedia\`:
 3. **State Sync**: Broadcasts desktop media state changes to connected extensions
 4. **Control**: Receives control commands from extension and forwards to Windows Media API
 
+### Desktop Timing
+
+When desktop media stops, the extension waits before triggering auto-resume. This prevents false triggers during track changes or app transitions.
+
+**Configuration** (in `extension/background/desktop-connector.js`):
+
+```javascript
+const DESKTOP_CONFIG = {
+  PAUSE_DEBOUNCE_DELAY: 1000,  // Wait 1s before confirming desktop stopped
+  // ... other settings
+};
+```
+
+This means when you pause/stop desktop media, the extension waits 1 second to confirm the media actually stopped (not just changing tracks) before resuming previous media.
+
 ### Supported Desktop Apps
 
 Any app that uses Windows Media Session API:
@@ -376,10 +391,6 @@ Verify:
 - Settings persistence
 - Desktop connection
 - Popup UI rendering
-
-## 📄 License
-
-MIT License - feel free to use and modify!
 
 ---
 

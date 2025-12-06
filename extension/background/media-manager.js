@@ -474,9 +474,12 @@ class MediaManager {
 
   /**
    * Find the next media eligible for auto-resume (not manually paused)
+   * @param {string} excludeMediaId - Optional mediaId to exclude (the one that just stopped)
    */
-  findNextAutoResumable() {
-    const index = this.pausedStack.findIndex(m => !m.manuallyPaused);
+  findNextAutoResumable(excludeMediaId = null) {
+    const index = this.pausedStack.findIndex(m =>
+      !m.manuallyPaused && m.mediaId !== excludeMediaId
+    );
     if (index !== -1) {
       const media = this.pausedStack[index];
       this.pausedStack.splice(index, 1);
@@ -513,10 +516,10 @@ class MediaManager {
       return;
     }
 
-    // Get media to resume
+    // Get media to resume (exclude the one that just stopped to avoid resuming itself)
     let toResume = specificMedia;
     if (!toResume) {
-      toResume = this.findNextAutoResumable();
+      toResume = this.findNextAutoResumable(stoppedMedia?.mediaId);
     }
 
     if (!toResume) {

@@ -937,13 +937,34 @@ class WindowsMediaManager:
                 if info.artist:
                     info.title = f"{info.artist} - {info.title}"
 
-                # Skip thumbnails for now - they're slow and hang
-                # thumbnail = media_props.thumbnail
-                # if thumbnail:
-                #     try:
-                #         info.cover_url = await self._get_thumbnail_data_url(thumbnail)
-                #     except Exception as e:
-                #         logger.debug(f"Error getting thumbnail: {e}")
+                # Try to get thumbnail with timeout (runs in thread to avoid blocking)
+                thumbnail = media_props.thumbnail
+                if thumbnail:
+                    try:
+                        def get_thumbnail():
+                            try:
+                                import asyncio
+                                loop = asyncio.new_event_loop()
+                                asyncio.set_event_loop(loop)
+                                try:
+                                    return loop.run_until_complete(
+                                        asyncio.wait_for(
+                                            self._get_thumbnail_data_url(thumbnail), 1.0
+                                        )
+                                    )
+                                finally:
+                                    loop.close()
+                            except Exception:
+                                return ""
+
+                        with concurrent.futures.ThreadPoolExecutor() as executor:
+                            future = executor.submit(get_thumbnail)
+                            try:
+                                info.cover_url = future.result(timeout=1.5)
+                            except concurrent.futures.TimeoutError:
+                                logger.debug(f"Thumbnail timeout for {session_id}")
+                    except Exception as e:
+                        logger.debug(f"Error getting thumbnail: {e}")
 
         except Exception as e:
             logger.debug(f"Error getting media properties: {e}")

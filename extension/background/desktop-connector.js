@@ -10,7 +10,7 @@ const DESKTOP_CONFIG = {
   RECONNECT_DELAY_BASE: 1000,            // Base delay between reconnects (ms)
   RECONNECT_DELAY_MAX: 30000,            // Maximum reconnect delay (ms)
   CONNECTION_CHECK_INTERVAL: 10000,      // How often to check connection status (ms)
-  PAUSE_DEBOUNCE_DELAY: 2000,            // Delay before confirming desktop stopped (ms)
+  PAUSE_DEBOUNCE_DELAY: 1000,            // Delay before confirming desktop stopped (ms)
   PING_INTERVAL: 15000,                  // How often to send ping (ms)
   PING_TIMEOUT: 5000                     // How long to wait for pong (ms)
 };
