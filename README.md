@@ -91,7 +91,7 @@ Control how paused media resumes:
   - Set to 0 to skip fade-in (instant volume)
   - Prevents sudden loud audio when resuming
 
-- **Start Volume**: Initial volume when fading in (default: 20%)
+  - **Start Volume**: Initial volume when fading in (default: 20%)
   - Media starts quiet and fades up to normal volume
 
 ### Auto-Resume Rules
@@ -111,7 +111,7 @@ Control when media automatically resumes:
 Add websites that should never be paused:
 
 - Enter a domain (e.g., `spotify.com`) and click Add
-- Supports wildcards: `*.example.com` matches all subdomains
+  - Supports wildcards: `*.example.com` matches all subdomains
 - Blacklisted media won't be paused and won't appear in the popup
 - Useful for background music or podcasts you want to keep playing
 

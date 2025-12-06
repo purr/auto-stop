@@ -16,9 +16,9 @@ INSTALL_DIR = Path(os.environ.get("APPDATA", "")) / APP_NAME
 
 # Logging configuration
 LOG_DIR = INSTALL_DIR / "logs"
-LOG_FILE = LOG_DIR / "service.log"
+LOG_FILE_PREFIX = "service"  # Will be service-YYYY-MM-DD.log
 LOG_MAX_SIZE = 5 * 1024 * 1024  # 5 MB
-LOG_BACKUP_COUNT = 3  # Keep 3 rotated log files
+LOG_RETENTION_DAYS = 7  # Keep logs for 7 days
 
 # Watchdog configuration
 WATCHDOG_CHECK_INTERVAL = 30  # seconds
@@ -46,6 +46,7 @@ class MSG:
     PING = "PING"
     PONG = "PONG"
     REGISTER_BROWSER = "REGISTER_BROWSER"
+    BROWSER_STATE_SYNC = "BROWSER_STATE_SYNC"
 
 
 class ACTION:

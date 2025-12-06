@@ -386,6 +386,13 @@ try {
         Copy-Item -Path $requirementsSource -Destination $InstallDir -Force
         Write-Success "Copied: requirements.txt"
     }
+
+    # Copy INFO.txt
+    $infoSource = Join-Path $ScriptDir "INFO.txt"
+    if (Test-Path $infoSource) {
+        Copy-Item -Path $infoSource -Destination $InstallDir -Force
+        Write-Success "Copied: INFO.txt"
+    }
 }
 catch {
     Write-Error2 "Failed to copy files: $_"

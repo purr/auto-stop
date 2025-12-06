@@ -41,6 +41,10 @@ class WebSocketServer:
         # Flag to prevent auto-pause loop when browser controls desktop media
         self._control_in_progress = False
         self._control_cooldown_task: Optional[asyncio.Task] = None
+        # Track browser media state for tray icon
+        self._browser_media_active = False
+        # Callback to update tray icon when state changes
+        self._on_tray_update: Optional[Callable] = None
 
     @property
     def is_available(self) -> bool:
@@ -50,9 +54,18 @@ class WebSocketServer:
     def client_count(self) -> int:
         return len(self._clients)
 
+    @property
+    def browser_media_active(self) -> bool:
+        """Check if browser media is currently playing"""
+        return self._browser_media_active
+
     def set_browser_event_handler(self, handler: Callable):
         """Set handler for browser media events (play/pause notifications)"""
         self._on_browser_media_event = handler
+
+    def set_tray_update_callback(self, callback: Callable):
+        """Set callback to update tray icon when state changes"""
+        self._on_tray_update = callback
 
     async def start(self):
         """Start the WebSocket server"""
@@ -145,7 +158,20 @@ class WebSocketServer:
             logger.debug(f"Received message: {msg_type}")
 
             if msg_type == MSG.PING:
-                await self._send(websocket, {"type": MSG.PONG})
+                # Include global playing state in PONG
+                state = self._media_manager.get_state()
+                desktop_playing = state.get("activeMedia") is not None
+                global_playing = self._browser_media_active or desktop_playing
+                await self._send(
+                    websocket,
+                    {
+                        "type": MSG.PONG,
+                        "data": {"globalPlaying": global_playing},
+                    },
+                )
+                # Update tray icon when ping received (keeps it in sync)
+                if self._on_tray_update:
+                    self._on_tray_update()
 
             elif msg_type == MSG.GET_DESKTOP_STATE:
                 await self._send_desktop_state(websocket)
@@ -186,6 +212,21 @@ class WebSocketServer:
                 self._media_manager.register_browser(data)
                 logger.info(f"Browser registered: {data.get('browser', 'unknown')}")
 
+            elif msg_type == MSG.BROWSER_STATE_SYNC:
+                # Browser is syncing its current state
+                has_active = data.get("hasActiveMedia", False)
+                active_media = data.get("activeMedia")
+                # Check if media is actually playing (not just exists)
+                is_playing = False
+                if has_active and active_media:
+                    is_playing = active_media.get("isPlaying", True)  # Default to True if not specified
+
+                self._browser_media_active = is_playing
+                logger.debug(f"Browser state sync: hasActiveMedia={has_active}, isPlaying={is_playing}, setting _browser_media_active={is_playing}")
+                # Update tray icon immediately
+                if self._on_tray_update:
+                    self._on_tray_update()
+
             elif msg_type == MSG.MEDIA_PLAY:
                 # Browser media started playing - pause desktop media
                 # BUT skip if browser just sent a control command (prevent loop)
@@ -194,6 +235,9 @@ class WebSocketServer:
                         "Ignoring MEDIA_PLAY during control cooldown (preventing loop)"
                     )
                     return
+
+                # Track browser media state for tray icon
+                self._browser_media_active = True
 
                 # Update browser media titles for filtering
                 title = data.get("title", "")
@@ -206,24 +250,35 @@ class WebSocketServer:
                 await self._media_manager.pause_all_except()
                 logger.info("Browser media started - paused desktop media")
                 await self.broadcast_desktop_state()
+                # Update tray icon immediately
+                if self._on_tray_update:
+                    self._on_tray_update()
 
             elif msg_type == MSG.MEDIA_PAUSE:
                 # Browser media paused
+                self._browser_media_active = False
                 title = data.get("title", "")
                 if title:
                     self._media_manager.update_browser_media(title, False)
 
                 if self._on_browser_media_event:
                     await self._on_browser_media_event("pause", data)
+                # Update tray icon immediately
+                if self._on_tray_update:
+                    self._on_tray_update()
 
             elif msg_type == MSG.MEDIA_ENDED:
                 # Browser media ended
+                self._browser_media_active = False
                 title = data.get("title", "")
                 if title:
                     self._media_manager.update_browser_media(title, False)
 
                 if self._on_browser_media_event:
                     await self._on_browser_media_event("ended", data)
+                # Update tray icon immediately
+                if self._on_tray_update:
+                    self._on_tray_update()
 
         except json.JSONDecodeError:
             logger.warning(f"Invalid JSON received: {raw_message[:100]}")

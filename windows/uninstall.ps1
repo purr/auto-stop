@@ -156,7 +156,7 @@ Write-Step "Stopping service..."
 
 # Re-check task (in case it was removed or doesn't exist)
 if (-not $task) {
-    $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+$task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
 }
 
 if ($task) {

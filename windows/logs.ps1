@@ -25,15 +25,24 @@ param(
     [int]$Lines = 50
 )
 
-$LogFile = Join-Path $env:APPDATA "AutoStopMedia\logs\service.log"
+$LogDir = Join-Path $env:APPDATA "AutoStopMedia\logs"
+$Today = Get-Date -Format "yyyy-MM-dd"
+$LogFile = Join-Path $LogDir "service-$Today.log"
 
+# If today's log doesn't exist, try to find the most recent log
 if (-not (Test-Path $LogFile)) {
-    Write-Host "Log file not found: $LogFile" -ForegroundColor Red
-    Write-Host "Is the service installed?" -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host "Press Enter to close..." -ForegroundColor Cyan
-    $null = Read-Host
-    exit 1
+    $LogFiles = Get-ChildItem -Path $LogDir -Filter "service-*.log" -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending
+    if ($LogFiles) {
+        $LogFile = $LogFiles[0].FullName
+        Write-Host "Today's log not found, showing most recent: $($LogFiles[0].Name)" -ForegroundColor Yellow
+    } else {
+        Write-Host "No log files found in: $LogDir" -ForegroundColor Red
+        Write-Host "Is the service installed and running?" -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "Press Enter to close..." -ForegroundColor Cyan
+        $null = Read-Host
+        exit 1
+    }
 }
 
 Write-Host ""

@@ -8,14 +8,14 @@ import os
 import signal
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from config import (
-    LOG_BACKUP_COUNT,
     LOG_DIR,
-    LOG_FILE,
+    LOG_FILE_PREFIX,
     LOG_MAX_SIZE,
+    LOG_RETENTION_DAYS,
     VERSION,
     WATCHDOG_CHECK_INTERVAL,
     WEBSOCKET_PORT,
@@ -32,8 +32,45 @@ sys.path.insert(0, str(SERVICE_DIR))
 _logging_configured = False
 
 
+def cleanup_old_logs():
+    """Delete log files older than LOG_RETENTION_DAYS"""
+    try:
+        if not LOG_DIR.exists():
+            return
+
+        cutoff_date = datetime.now() - timedelta(days=LOG_RETENTION_DAYS)
+        deleted_count = 0
+
+        for log_file in LOG_DIR.glob(f"{LOG_FILE_PREFIX}-*.log*"):
+            try:
+                # Try to parse date from filename (service-YYYY-MM-DD.log or service-YYYY-MM-DD.log.1)
+                filename = log_file.stem  # Get name without extension
+                if filename.startswith(LOG_FILE_PREFIX + "-"):
+                    date_str = filename[len(LOG_FILE_PREFIX) + 1 :].split(".")[0]
+                    file_date = datetime.strptime(date_str, "%Y-%m-%d")
+                    if file_date < cutoff_date:
+                        log_file.unlink()
+                        deleted_count += 1
+            except (ValueError, IndexError):
+                # If we can't parse the date, check file modification time
+                try:
+                    mtime = datetime.fromtimestamp(log_file.stat().st_mtime)
+                    if mtime < cutoff_date:
+                        log_file.unlink()
+                        deleted_count += 1
+                except Exception:
+                    pass
+
+        if deleted_count > 0:
+            # Use basic print since logger might not be configured yet
+            print(f"[AutoStop] Cleaned up {deleted_count} old log file(s)")
+    except Exception as e:
+        # Use basic print since logger might not be configured yet
+        print(f"[AutoStop] Warning: Failed to cleanup old logs: {e}")
+
+
 def setup_logging():
-    """Configure logging with rotation"""
+    """Configure logging with date-based rotation"""
     global _logging_configured
 
     # Only configure once to avoid duplicate handlers
@@ -43,14 +80,22 @@ def setup_logging():
     # Ensure log directory exists
     LOG_DIR.mkdir(parents=True, exist_ok=True)
 
+    # Clean up old logs
+    cleanup_old_logs()
+
     # Create formatter
     formatter = logging.Formatter(
         "%(asctime)s [%(levelname)s] %(name)s: %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
     )
 
-    # File handler with rotation
+    # Create date-based log filename
+    today = datetime.now().strftime("%Y-%m-%d")
+    log_file = LOG_DIR / f"{LOG_FILE_PREFIX}-{today}.log"
+
+    # File handler with size-based rotation (within same day)
+    # When size limit is reached, it will create .1, .2, etc. backups
     file_handler = logging.handlers.RotatingFileHandler(
-        LOG_FILE, maxBytes=LOG_MAX_SIZE, backupCount=LOG_BACKUP_COUNT, encoding="utf-8"
+        log_file, maxBytes=LOG_MAX_SIZE, backupCount=5, encoding="utf-8"
     )
     file_handler.setFormatter(formatter)
     file_handler.setLevel(logging.DEBUG)
@@ -110,7 +155,7 @@ class AutoStopService:
         async def on_media_state_change(state):
             """Called when desktop media state changes"""
             await self.websocket_server.broadcast_desktop_state()
-            # Update tray icon
+            # Update tray icon immediately
             self._update_tray_icon()
 
         if not await self.media_manager.start(on_state_change=on_media_state_change):
@@ -128,6 +173,9 @@ class AutoStopService:
             self.logger.error("Failed to start WebSocket server")
             await self.media_manager.stop()
             return False
+
+        # Set callback to update tray icon when browser media state changes
+        self.websocket_server.set_tray_update_callback(self._update_tray_icon)
 
         self.logger.info("Service started successfully")
         self._update_tray_icon()
@@ -169,10 +217,24 @@ class AutoStopService:
         try:
             client_count = self.websocket_server.client_count
             state = self.media_manager.get_state()
-            active_media = state.get("activeMedia")
+            desktop_media = state.get("activeMedia")
+            browser_media_active = self.websocket_server.browser_media_active
+
+            # Check if desktop media is actually PLAYING (not just exists)
+            desktop_playing = False
+            if desktop_media is not None:
+                # Desktop media must be playing (isPlaying should be True)
+                desktop_playing = desktop_media.get("isPlaying", False)
+
+            # Media is playing if either browser or desktop media is actively playing
+            has_media = browser_media_active or desktop_playing
 
             self._tray_icon.update_status(
-                connected_clients=client_count, active_media=active_media
+                connected_clients=client_count,
+                active_media=desktop_media
+                if desktop_playing
+                else ({"title": "Browser Media"} if browser_media_active else None),
+                has_any_media=has_media,
             )
         except Exception as e:
             self.logger.debug(f"Failed to update tray icon: {e}")
@@ -200,6 +262,9 @@ class AutoStopService:
 
     async def _watchdog(self):
         """Watchdog task to monitor service health"""
+        last_cleanup = time.time()
+        cleanup_interval = 24 * 60 * 60  # Run cleanup once per day
+
         while self._running:
             try:
                 await asyncio.sleep(WATCHDOG_CHECK_INTERVAL)
@@ -215,6 +280,11 @@ class AutoStopService:
                     f"Heartbeat: {client_count} clients, "
                     f"{active_count} active, {paused_count} paused desktop media"
                 )
+
+                # Periodic log cleanup (once per day)
+                if time.time() - last_cleanup > cleanup_interval:
+                    cleanup_old_logs()
+                    last_cleanup = time.time()
 
                 # Update tray icon
                 self._update_tray_icon()

@@ -1,0 +1,63 @@
+Auto-Stop Media - Windows Service
+==================================
+
+This folder contains the Auto-Stop Media Windows background service.
+
+WHAT IS THIS?
+-------------
+This service enables the Firefox Auto-Stop Media extension to control and monitor desktop media applications (Spotify, VLC, Windows Media Player, etc.).
+
+The service runs in the background and connects to the browser extension via WebSocket, allowing you to:
+- Control desktop media from your browser
+- Automatically pause desktop apps when browser media plays
+- See desktop media in the extension popup
+
+FOLDER STRUCTURE
+----------------
+service/          - Python service files (main.py, etc.)
+logs/             - Service log files (rotated daily, kept for 7 days)
+requirements.txt  - Python dependencies
+version.txt       - Installed version
+INFO.txt         - This file
+
+LOG FILES
+---------
+Log files are named by date: service-YYYY-MM-DD.log
+- Logs are rotated daily (new file each day)
+- Old logs are automatically deleted after 7 days
+- Logs are located in: logs/
+
+MANAGING THE SERVICE
+--------------------
+The service runs automatically at Windows login via Task Scheduler.
+
+To manage the service:
+- View logs: Run logs.ps1 from the windows folder
+- Restart: Run restart.ps1 from the windows folder
+- Stop: Run stop.ps1 from the windows folder
+- Uninstall: Run uninstall.ps1 from the windows folder
+
+Or use Task Scheduler:
+- Press Win+R, type: taskschd.msc
+- Find "AutoStopMediaService"
+- Right-click to Start, Stop, or Disable
+
+TROUBLESHOOTING
+---------------
+If the extension shows "Desktop offline":
+1. Check if the service is running (Task Scheduler)
+2. Check logs in the logs/ folder
+3. Restart the service (restart.ps1)
+
+For more information, see:
+- README.md in the windows folder
+- TECHNICAL.md in the project root
+
+UNINSTALL
+---------
+To completely remove this service:
+1. Run uninstall.ps1 from the windows folder
+2. Or manually delete this folder: %APPDATA%\AutoStopMedia
+
+The Firefox extension will continue to work for browser media only.
+

@@ -85,6 +85,9 @@ class DesktopConnector {
           }
         });
 
+        // Send current browser media state immediately
+        this.sendBrowserState();
+
         // Request initial state
         this.send({ type: 'GET_DESKTOP_STATE' });
 
@@ -170,6 +173,12 @@ class DesktopConnector {
           if (this.pingTimeout) {
             clearTimeout(this.pingTimeout);
             this.pingTimeout = null;
+          }
+          // PONG may include global playing state for icon sync
+          if (data && data.globalPlaying !== undefined) {
+            // Service is telling us the global playing state
+            // This helps keep icons in sync
+            Logger.debug('PONG global playing state:', data.globalPlaying);
           }
           break;
 
@@ -383,6 +392,31 @@ class DesktopConnector {
       clearTimeout(this._pauseDebounceTimer);
       this._pauseDebounceTimer = null;
     }
+  }
+
+  /**
+   * Send current browser media state to desktop service
+   */
+  sendBrowserState() {
+    if (!this.connected || !this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    const hasActiveMedia = this.mediaManager.activeMedia !== null;
+    const activeMedia = this.mediaManager.activeMedia;
+
+    // Send browser state sync message
+    this.send({
+      type: 'BROWSER_STATE_SYNC',
+      data: {
+        hasActiveMedia: hasActiveMedia,
+        activeMedia: hasActiveMedia ? {
+          title: activeMedia.title || 'Unknown',
+          mediaId: activeMedia.mediaId || '',
+          isPlaying: activeMedia.isPlaying !== false
+        } : null
+      }
+    });
   }
 
   /**

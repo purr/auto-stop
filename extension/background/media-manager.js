@@ -1335,6 +1335,11 @@ class MediaManager {
 
     this.updateIcon();
 
+    // Send browser state to desktop service if connected
+    if (this.desktopConnector && this.desktopConnector.connected) {
+      this.desktopConnector.sendBrowserState();
+    }
+
     browser.runtime.sendMessage({
       type: AUTOSTOP.MSG.STATE_UPDATE,
       data: this.getState()
