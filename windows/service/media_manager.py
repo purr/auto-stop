@@ -726,8 +726,19 @@ class WindowsMediaManager:
                 if self._is_browser_app_id(app_id_raw):
                     continue  # Skip browser sessions
 
-                info = await self._get_media_info(session, session_id)
-                current_session_ids.add(session_id)
+                # Add timeout to prevent one hanging session from blocking all others
+                try:
+                    info = await asyncio.wait_for(
+                        self._get_media_info(session, session_id),
+                        timeout=3.0  # 3 second max per session
+                    )
+                    current_session_ids.add(session_id)
+                except asyncio.TimeoutError:
+                    logger.warning(f"Timeout getting media info for {session_id} - skipping")
+                    continue
+                except Exception as e:
+                    logger.error(f"Error getting media info for {session_id}: {e}")
+                    continue
 
                 logger.debug(
                     f"Session {session_id}: playing={info.is_playing}, title='{info.title}', pos={info.current_time:.1f}/{info.duration:.1f}"
@@ -839,60 +850,89 @@ class WindowsMediaManager:
 
         try:
             # Get timeline (position/duration) - get this first to check if media ended
-            timeline = session.get_timeline_properties()
-            if timeline:
-                # Convert from TimeSpan (100-nanosecond units) to seconds
-                info.current_time = (
-                    timeline.position.total_seconds() if timeline.position else 0
-                )
-                info.duration = (
-                    timeline.end_time.total_seconds() if timeline.end_time else 0
-                )
+            # Wrap in thread with timeout to prevent hanging
+            import concurrent.futures
+
+            def get_timeline():
+                try:
+                    return session.get_timeline_properties()
+                except Exception:
+                    return None
+
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(get_timeline)
+                try:
+                    timeline = future.result(timeout=0.5)
+                    if timeline:
+                        # Convert from TimeSpan (100-nanosecond units) to seconds
+                        info.current_time = (
+                            timeline.position.total_seconds() if timeline.position else 0
+                        )
+                        info.duration = (
+                            timeline.end_time.total_seconds() if timeline.end_time else 0
+                        )
+                except concurrent.futures.TimeoutError:
+                    logger.debug(f"Timeout getting timeline for {session_id}")
+                except Exception as e:
+                    logger.debug(f"Error getting timeline: {e}")
         except Exception as e:
-            logger.debug(f"Error getting timeline: {e}")
+            logger.debug(f"Error in timeline thread: {e}")
 
         try:
-            # Get playback info
-            playback_info = session.get_playback_info()
-            if playback_info:
-                status = playback_info.playback_status
-                info.is_playing = status == PlaybackStatus.PLAYING
-
-                # Detect manual pause: check if status is PAUSED
-                # Windows Media Session API status values:
-                # 0 = Playing, 1 = Paused, 2 = Stopped, 3 = Closed
-                # If status is PAUSED (1), it's likely manually paused
-                # If status is STOPPED (2) or CLOSED (3), it's likely ended/closed
+            # Get playback info - wrap in thread with timeout to prevent hanging
+            def get_playback():
                 try:
-                    # Try to access PAUSED constant
-                    paused_status = getattr(PlaybackStatus, "PAUSED", None)
-                    if paused_status is None:
-                        # Fallback: check if status value is 1 (PAUSED)
-                        # Convert status to int and check
-                        status_value = (
-                            int(status) if hasattr(status, "__int__") else status
-                        )
-                        info.manually_paused = status_value == 1  # 1 = PAUSED
-                    else:
-                        info.manually_paused = status == paused_status
+                    return session.get_playback_info()
                 except Exception:
-                    # Fallback: assume not manually paused if we can't determine
-                    info.manually_paused = False
+                    return None
 
-                # Check if media has reached the end (even if status is still PLAYING)
-                # Some apps don't update playback status immediately when media ends
-                if info.duration > 0 and info.current_time > 0:
-                    # If we're at or past the end (with 2 second tolerance), mark as stopped
-                    if info.current_time >= (info.duration - 2.0):
-                        info.is_playing = False
-                        info.manually_paused = False  # Ended, not manually paused
-                        logger.debug(
-                            f"Media ended: {info.title} ({info.current_time:.1f}/{info.duration:.1f})"
-                        )
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(get_playback)
+                try:
+                    playback_info = future.result(timeout=0.5)
+                    if playback_info:
+                        status = playback_info.playback_status
+                        info.is_playing = status == PlaybackStatus.PLAYING
 
-                # Get playback rate if available
-                if playback_info.playback_rate:
-                    info.playback_rate = playback_info.playback_rate
+                        # Detect manual pause: check if status is PAUSED
+                        # Windows Media Session API status values:
+                        # 0 = Playing, 1 = Paused, 2 = Stopped, 3 = Closed
+                        # If status is PAUSED (1), it's likely manually paused
+                        # If status is STOPPED (2) or CLOSED (3), it's likely ended/closed
+                        try:
+                            # Try to access PAUSED constant
+                            paused_status = getattr(PlaybackStatus, "PAUSED", None)
+                            if paused_status is None:
+                                # Fallback: check if status value is 1 (PAUSED)
+                                # Convert status to int and check
+                                status_value = (
+                                    int(status) if hasattr(status, "__int__") else status
+                                )
+                                info.manually_paused = status_value == 1  # 1 = PAUSED
+                            else:
+                                info.manually_paused = status == paused_status
+                        except Exception:
+                            # Fallback: assume not manually paused if we can't determine
+                            info.manually_paused = False
+
+                        # Check if media has reached the end (even if status is still PLAYING)
+                        # Some apps don't update playback status immediately when media ends
+                        if info.duration > 0 and info.current_time > 0:
+                            # If we're at or past the end (with 2 second tolerance), mark as stopped
+                            if info.current_time >= (info.duration - 2.0):
+                                info.is_playing = False
+                                info.manually_paused = False  # Ended, not manually paused
+                                logger.debug(
+                                    f"Media ended: {info.title} ({info.current_time:.1f}/{info.duration:.1f})"
+                                )
+
+                        # Get playback rate if available
+                        if playback_info.playback_rate:
+                            info.playback_rate = playback_info.playback_rate
+                except concurrent.futures.TimeoutError:
+                    logger.debug(f"Timeout getting playback info for {session_id}")
+                except Exception as e:
+                    logger.debug(f"Error getting playback info: {e}")
         except Exception as e:
             logger.debug(f"Error getting playback info: {e}")
 
@@ -937,34 +977,9 @@ class WindowsMediaManager:
                 if info.artist:
                     info.title = f"{info.artist} - {info.title}"
 
-                # Try to get thumbnail with timeout (runs in thread to avoid blocking)
-                thumbnail = media_props.thumbnail
-                if thumbnail:
-                    try:
-                        def get_thumbnail():
-                            try:
-                                import asyncio
-                                loop = asyncio.new_event_loop()
-                                asyncio.set_event_loop(loop)
-                                try:
-                                    return loop.run_until_complete(
-                                        asyncio.wait_for(
-                                            self._get_thumbnail_data_url(thumbnail), 1.0
-                                        )
-                                    )
-                                finally:
-                                    loop.close()
-                            except Exception:
-                                return ""
-
-                        with concurrent.futures.ThreadPoolExecutor() as executor:
-                            future = executor.submit(get_thumbnail)
-                            try:
-                                info.cover_url = future.result(timeout=1.5)
-                            except concurrent.futures.TimeoutError:
-                                logger.debug(f"Thumbnail timeout for {session_id}")
-                    except Exception as e:
-                        logger.debug(f"Error getting thumbnail: {e}")
+                # Cover art/thumbnail fetching disabled to prevent timeouts and freezing
+                # Thumbnail fetching can hang on some apps (like AyuGram)
+                info.cover_url = ""
 
         except Exception as e:
             logger.debug(f"Error getting media properties: {e}")

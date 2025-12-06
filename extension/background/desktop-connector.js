@@ -229,8 +229,13 @@ class DesktopConnector {
       } else if (isPlayingChanged && !newActive.isPlaying) {
         Logger.media('Desktop media paused/ended', newActive);
         this.mediaManager.onDesktopMediaPause(newActive);
+      } else if (!newActive.isPlaying) {
+        // CRITICAL: If isPlaying is false (even if unchanged), treat as pause
+        // This handles cases where Python service is frozen and keeps sending stale state
+        Logger.media('Desktop media not playing (stale state?)', newActive);
+        this.mediaManager.onDesktopMediaPause(newActive);
       } else {
-        // Just progress update
+        // Just progress update (and isPlaying is true)
         if (this.mediaManager.activeMedia && this.mediaManager.activeMedia.mediaId === newActive.mediaId) {
           this.mediaManager.activeMedia.currentTime = newActive.currentTime || 0;
           this.mediaManager.activeMedia.duration = newActive.duration || 0;
