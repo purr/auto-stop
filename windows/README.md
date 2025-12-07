@@ -34,7 +34,7 @@ The installer will:
 ### Installation Options
 
 ```powershell
-# Force reinstall even if same version exists
+# Force update/reinstall (upgrade, downgrade, or reinstall same version)
 .\install.ps1 -Force
 
 # Install but don't start the service yet

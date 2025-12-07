@@ -33,6 +33,7 @@ class Colors:
 
     # Status colors
     RED = "#eb6f92"  # Not connected (red/pink)
+    YELLOW = "#f6c177"  # Idle, no browser connected (yellow)
 
     @staticmethod
     def hex_to_rgb(hex_color: str) -> tuple:
@@ -135,16 +136,16 @@ class TrayIcon:
             )
 
         else:
-            # NOT CONNECTED: Play triangle, red, not dimmed
-            # Background circle with red stroke
+            # NOT CONNECTED, IDLE: Play triangle, yellow
+            # Background circle with yellow stroke
             draw.ellipse(
                 [center_x - radius, center_y - radius, center_x + radius, center_y + radius],
                 fill=Colors.hex_to_rgb(Colors.BG_DARK),
-                outline=Colors.hex_to_rgb(Colors.RED),
+                outline=Colors.hex_to_rgb(Colors.YELLOW),
                 width=4,
             )
 
-            # Draw play triangle (pointing right) in red
+            # Draw play triangle (pointing right) in yellow
             triangle_size = 56
             x1 = center_x - triangle_size // 3
             y1 = center_y - triangle_size // 2
@@ -154,7 +155,7 @@ class TrayIcon:
             y3 = center_y
             draw.polygon(
                 [(x1, y1), (x2, y2), (x3, y3)],
-                fill=Colors.hex_to_rgb(Colors.RED),
+                fill=Colors.hex_to_rgb(Colors.YELLOW),
             )
 
         return image

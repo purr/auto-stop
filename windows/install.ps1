@@ -16,7 +16,7 @@
     - Optionally starts the service immediately
 
 .PARAMETER Force
-    Force reinstall even if already installed.
+    Force update/reinstall even if already installed. Use this to update to a newer version, downgrade to an older version, or reinstall the same version.
 
 .PARAMETER NoStart
     Don't start the service after installation.
@@ -26,6 +26,7 @@
 
 .EXAMPLE
     .\install.ps1 -Force
+    Force update/reinstall (upgrade, downgrade, or reinstall same version)
 
 .NOTES
     Requires PowerShell 7.0 or higher, Windows 10/11, and Python 3.9 or higher.
@@ -296,7 +297,7 @@ if ($existingVersion) {
     Write-Info "Found existing installation: v$existingVersion"
 
     if ($existingVersion -eq $ServiceVersion -and -not $Force) {
-        Write-Warning2 "Same version already installed. Use -Force to reinstall."
+        Write-Warning2 "Same version already installed. Use -Force to update/reinstall."
 
         # Check if service is running
         $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
@@ -311,12 +312,19 @@ if ($existingVersion) {
     if ([Version]$existingVersion -gt [Version]$ServiceVersion) {
         Write-Warning2 "Installed version ($existingVersion) is newer than this installer ($ServiceVersion)"
         if (-not $Force) {
-            Write-ColorOutput "Use -Force to downgrade." -Color "Yellow"
+            Write-ColorOutput "Use -Force to update/downgrade." -Color "Yellow"
             Wait-ForExit 1
         }
     }
 
-    Write-Info "Upgrading from v$existingVersion to v$ServiceVersion"
+    # Determine if this is an upgrade or downgrade
+    if ([Version]$existingVersion -lt [Version]$ServiceVersion) {
+        Write-Info "Updating from v$existingVersion to v$ServiceVersion"
+    } elseif ([Version]$existingVersion -gt [Version]$ServiceVersion) {
+        Write-Info "Downgrading from v$existingVersion to v$ServiceVersion"
+    } else {
+        Write-Info "Reinstalling v$ServiceVersion"
+    }
 
     # Stop existing service if running
     Write-Info "Stopping existing service..."
