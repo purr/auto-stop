@@ -549,8 +549,8 @@ class PopupController {
     emptyState.classList.add('hidden');
     wrapper.classList.remove('hidden');
 
-    // Check if the filtered stack has actually changed (including manuallyPaused flag)
-    const currentState = filteredStack.map(m => `${m.mediaId}:${m.manuallyPaused}`).join(',');
+    // Check if the filtered stack has actually changed (including manuallyPaused and expired flags)
+    const currentState = filteredStack.map(m => `${m.mediaId}:${m.manuallyPaused}:${m.expired}`).join(',');
     const prevState = this.prevPausedStackState || '';
 
     if (currentState === prevState) {
@@ -597,14 +597,27 @@ class PopupController {
 
   createMediaListItem(media) {
     const item = document.createElement('div');
-    item.className = `media-list-item ${media.manuallyPaused ? 'manually-paused' : ''}`;
+    // Determine the state class: expired takes precedence, then manually-paused
+    let stateClass = '';
+    if (media.expired) {
+      stateClass = 'expired';
+    } else if (media.manuallyPaused) {
+      stateClass = 'manually-paused';
+    }
+    item.className = `media-list-item ${stateClass}`;
     item.dataset.mediaId = media.mediaId;
 
     const isDesktop = this.isDesktopMedia(media);
 
-    // Status dot
+    // Status dot - show different states: expired (gray), manual (muted), paused (gold)
     const statusDot = document.createElement('div');
-    statusDot.className = `status-dot ${media.manuallyPaused ? 'manual' : 'paused'}`;
+    let dotClass = 'paused';
+    if (media.expired) {
+      dotClass = 'expired';
+    } else if (media.manuallyPaused) {
+      dotClass = 'manual';
+    }
+    statusDot.className = `status-dot ${dotClass}`;
     item.appendChild(statusDot);
 
     // Mini cover
@@ -627,7 +640,14 @@ class PopupController {
     const itemTitle = document.createElement('div');
     itemTitle.className = 'item-title';
     itemTitle.textContent = media.title || 'Unknown';
-    itemTitle.title = media.manuallyPaused ? "Manually paused - won't auto-resume" : '';
+    // Set tooltip based on state
+    if (media.expired) {
+      itemTitle.title = "Expired - won't auto-resume (click to play manually)";
+    } else if (media.manuallyPaused) {
+      itemTitle.title = "Manually paused - won't auto-resume";
+    } else {
+      itemTitle.title = '';
+    }
     itemInfo.appendChild(itemTitle);
 
     const itemSource = document.createElement('div');

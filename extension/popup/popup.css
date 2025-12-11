@@ -962,6 +962,12 @@ body::-webkit-scrollbar-thumb {
   background: var(--rp-muted);
 }
 
+/* Expired state - distinct from manual, more faded */
+.media-list-item .status-dot.expired {
+  background: var(--rp-highlight-high);
+  opacity: 0.6;
+}
+
 /* Manually paused items are slightly dimmed */
 .media-list-item.manually-paused {
   opacity: 0.7;
@@ -969,6 +975,20 @@ body::-webkit-scrollbar-thumb {
 
 .media-list-item.manually-paused:hover {
   opacity: 1;
+}
+
+/* Expired items are more dimmed with a subtle strikethrough effect */
+.media-list-item.expired {
+  opacity: 0.5;
+}
+
+.media-list-item.expired .item-title {
+  text-decoration: line-through;
+  text-decoration-color: var(--rp-highlight-high);
+}
+
+.media-list-item.expired:hover {
+  opacity: 0.8;
 }
 
 

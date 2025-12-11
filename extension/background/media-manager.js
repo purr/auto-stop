@@ -274,7 +274,7 @@ class MediaManager {
       // Pause the previously active media (browser or desktop)
       await this.pauseActiveMedia();
 
-      // Add to paused stack with manuallyPaused = FALSE and timestamp
+      // Add to paused stack with manuallyPaused = FALSE, expired = FALSE, and timestamp
       this.pausedStack = this.pausedStack.filter(m =>
         !(m.tabId === this.activeMedia.tabId &&
           m.frameId === this.activeMedia.frameId &&
@@ -283,6 +283,7 @@ class MediaManager {
       this.pausedStack.unshift({
         ...this.activeMedia,
         manuallyPaused: false,
+        expired: false,
         pausedAt: Date.now()
       });
 
@@ -473,12 +474,12 @@ class MediaManager {
   }
 
   /**
-   * Find the next media eligible for auto-resume (not manually paused)
+   * Find the next media eligible for auto-resume (not manually paused or expired)
    * @param {string} excludeMediaId - Optional mediaId to exclude (the one that just stopped)
    */
   findNextAutoResumable(excludeMediaId = null) {
     const index = this.pausedStack.findIndex(m =>
-      !m.manuallyPaused && m.mediaId !== excludeMediaId
+      !m.manuallyPaused && !m.expired && m.mediaId !== excludeMediaId
     );
     if (index !== -1) {
       const media = this.pausedStack[index];
@@ -503,7 +504,15 @@ class MediaManager {
       Logger.debug(`Auto-expire check: played ${Math.round(playDuration)}s, threshold ${settings.autoExpireSeconds}s`);
 
       if (playDuration >= settings.autoExpireSeconds) {
-        Logger.info(`AUTO-EXPIRE: Media played for ${Math.round(playDuration)}s - NOT resuming`);
+        Logger.info(`AUTO-EXPIRE: Media played for ${Math.round(playDuration)}s - expiring ALL paused media`);
+
+        // Mark ALL paused media as expired (separate from manuallyPaused)
+        // This ensures old media won't be auto-resumed later when new media stops
+        // They can still be manually resumed by clicking play
+        this.pausedStack.forEach(m => {
+          m.expired = true;
+        });
+
         this.broadcastUpdate();
         return;
       }
@@ -990,6 +999,7 @@ class MediaManager {
       this.pausedStack.unshift({
         ...previousMedia,
         manuallyPaused: false,
+        expired: false,
         pausedAt: Date.now()
       });
     }
