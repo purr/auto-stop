@@ -7,6 +7,8 @@ class BaseAdapter {
     this.mediaElements = new Map(); // mediaId -> { element, info }
     this.pausedByExtension = new Set();
     this.mediaIdCounter = 0;
+    // Track when we're setting volume ourselves to prevent feedback loops
+    this.volumeChangeFromExtension = new WeakSet(); // Set of elements we're currently setting volume on
   }
 
   /**
@@ -135,51 +137,25 @@ class BaseAdapter {
    */
   play(mediaId) {
     const stored = this.mediaElements.get(mediaId);
-    if (stored?.element) {
+    if (stored?.element && document.contains(stored.element)) {
       stored.element.play().catch(() => {});
     } else {
-      // Fallback: element not found, try to play any paused media in the page
-      Logger.warn('Element not found for mediaId:', mediaId, '- using fallback');
-      this.playAnyPaused();
+      // Media element doesn't exist - notify background to clean up
+      Logger.warn('Element not found for mediaId:', mediaId, '- media may have been cleaned up (scrolled away)');
+      // Notify background that this mediaId is stale
+      this.sendMessage(AUTOSTOP.MSG.MEDIA_UNREGISTERED, { mediaId });
+      // Don't use fallback - it causes issues with stale mediaIds
     }
   }
 
   /**
    * Fallback: play any paused media element on the page
    * Also re-registers the element so background gets updated info
+   * NOTE: This is deprecated - we don't use fallbacks anymore to prevent feedback loops
    */
   playAnyPaused() {
-    const mediaElements = document.querySelectorAll('video, audio');
-    for (const el of mediaElements) {
-      // Skip tiny elements (likely UI sounds)
-      if (el.duration > 1 && el.paused && !el.ended) {
-        Logger.info('Fallback: playing paused element', el.src?.substring(0, 50) || el.tagName);
-
-        // Re-register if needed (it might have a stale or no mediaId)
-        if (!el._autoStopMediaId || !this.mediaElements.has(el._autoStopMediaId)) {
-          this.reRegisterElement(el);
-        }
-
-        el.play().catch(() => {});
-        return true;
-      }
-    }
-
-    // Also try elements that have currentSrc but aren't playing
-    for (const el of mediaElements) {
-      if (el.currentSrc && el.paused) {
-        Logger.info('Fallback: playing element with currentSrc');
-
-        if (!el._autoStopMediaId || !this.mediaElements.has(el._autoStopMediaId)) {
-          this.reRegisterElement(el);
-        }
-
-        el.play().catch(() => {});
-        return true;
-      }
-    }
-
-    Logger.warn('Fallback: no paused media found to play');
+    // Don't use fallback - it causes issues with stale mediaIds and feedback loops
+    Logger.debug('Fallback playAnyPaused called but disabled to prevent feedback loops');
     return false;
   }
 
@@ -209,39 +185,25 @@ class BaseAdapter {
    */
   pause(mediaId) {
     const stored = this.mediaElements.get(mediaId);
-    if (stored?.element) {
+    if (stored?.element && document.contains(stored.element)) {
       this.pausedByExtension.add(mediaId);
       stored.element.pause();
     } else {
-      // Fallback: pause any playing media
-      Logger.warn('Element not found for mediaId:', mediaId, '- using fallback');
-      this.pauseAnyPlaying();
+      // Media element doesn't exist - notify background to clean up
+      Logger.warn('Element not found for mediaId:', mediaId, '- media may have been cleaned up (scrolled away)');
+      // Notify background that this mediaId is stale
+      this.sendMessage(AUTOSTOP.MSG.MEDIA_UNREGISTERED, { mediaId });
+      // Don't use fallback - it causes issues with stale mediaIds
     }
   }
 
   /**
    * Fallback: pause any playing media element on the page
+   * NOTE: This is deprecated - we don't use fallbacks anymore to prevent feedback loops
    */
   pauseAnyPlaying() {
-    const mediaElements = document.querySelectorAll('video, audio');
-    for (const el of mediaElements) {
-      if (!el.paused && !el.ended) {
-        Logger.info('Fallback: pausing playing element');
-
-        // Re-register if needed
-        if (!el._autoStopMediaId || !this.mediaElements.has(el._autoStopMediaId)) {
-          const newMediaId = this.reRegisterElement(el);
-          this.pausedByExtension.add(newMediaId);
-        } else {
-          this.pausedByExtension.add(el._autoStopMediaId);
-        }
-
-        el.pause();
-        return true;
-      }
-    }
-
-    Logger.warn('Fallback: no playing media found to pause');
+    // Don't use fallback - it causes issues with stale mediaIds and feedback loops
+    Logger.debug('Fallback pauseAnyPlaying called but disabled to prevent feedback loops');
     return false;
   }
 
@@ -254,19 +216,26 @@ class BaseAdapter {
     const clampedVolume = Math.max(0, Math.min(1, volume));
     const stored = this.mediaElements.get(mediaId);
 
-    if (stored?.element) {
+    if (stored?.element && document.contains(stored.element)) {
+      // Mark that we're setting volume to prevent feedback loops
+      if (this.volumeChangeFromExtension) {
+        this.volumeChangeFromExtension.add(stored.element);
+      }
       stored.element.volume = clampedVolume;
       Logger.debug('Volume set to:', (clampedVolume * 100).toFixed(0) + '%', 'on element:', mediaId);
-    } else {
-      // Fallback: try to set volume on all playing media elements
-      Logger.warn('Element not found for mediaId:', mediaId, '- trying fallback');
-      const mediaElements = document.querySelectorAll('video, audio');
-      mediaElements.forEach(el => {
-        if (!el.paused) {
-          el.volume = clampedVolume;
-          Logger.debug('Fallback volume set on playing element');
+
+      // Clear the flag after a short delay to allow the volumechange event to fire
+      setTimeout(() => {
+        if (this.volumeChangeFromExtension && stored.element) {
+          this.volumeChangeFromExtension.delete(stored.element);
         }
-      });
+      }, 100);
+    } else {
+      // Media element doesn't exist or was removed - notify background to clean up
+      Logger.warn('Element not found for mediaId:', mediaId, '- media may have been cleaned up (scrolled away)');
+      // Notify background that this mediaId is stale
+      this.sendMessage(AUTOSTOP.MSG.MEDIA_UNREGISTERED, { mediaId });
+      // Don't set volume on random elements - this causes feedback loops
     }
   }
 

@@ -7,7 +7,9 @@
 const MEDIA_MANAGER_CONFIG = {
   STALE_CHECK_INTERVAL: 3000,    // How often to check for stale active media (ms)
   STALE_THRESHOLD: 5000,         // How long without heartbeat before media is stale (ms)
-  GHOST_EVENT_WINDOW: 3000       // Ignore pause events within this time after extension-pause (ms)
+  GHOST_EVENT_WINDOW: 3000,      // Ignore pause events within this time after extension-pause (ms)
+  RAPID_PLAY_COOLDOWN: 300,      // Cooldown period per media (ms) - reduced for TikTok responsiveness
+  SCROLL_COOLDOWN: 1500          // Don't pause previous media if new media starts on same tab within this time (ms) - for TikTok scrolling
 };
 
 class MediaManager {
@@ -28,6 +30,10 @@ class MediaManager {
 
     // Desktop connector (initialized in index.js)
     this.desktopConnector = null;
+
+    // Track recent play events to prevent spam from rapid scrolling
+    this.recentPlayEvents = new Map(); // mediaId -> timestamp
+    this.lastPlayEventTime = 0; // Timestamp of last play event handled
 
     // Start periodic stale check
     this.startStaleCheck();
@@ -171,6 +177,13 @@ class MediaManager {
 
     this.allMedia.delete(key);
     this.originalVolumes.delete(data.mediaId);
+    this.recentPlayEvents.delete(data.mediaId);
+
+    // CRITICAL: Cancel any pending resume/fade-in for this mediaId
+    if (this.pendingResume && this.pendingResume.media?.mediaId === data.mediaId) {
+      Logger.info('Cancelling pending resume - media was unregistered:', data.mediaId);
+      this.cancelPendingResume(false);
+    }
 
     // Remove from paused stack
     const prevStackLength = this.pausedStack.length;
@@ -224,11 +237,20 @@ class MediaManager {
       return;
     }
 
-    // Check if this media was recently paused by the extension (within last 3 seconds)
+    // Rate limiting: prevent rapid-fire play events PER MEDIA (not global)
+    // This allows legitimate new videos to play while preventing spam from same video
+    const now = Date.now();
+    const lastPlayTime = this.recentPlayEvents.get(data.mediaId);
+    if (lastPlayTime && (now - lastPlayTime < MEDIA_MANAGER_CONFIG.RAPID_PLAY_COOLDOWN)) {
+      Logger.debug('Ignoring rapid play event for same media (cooldown):', data.title, '- waited', now - lastPlayTime, 'ms');
+      return;
+    }
+
+    // Check if this media was recently paused by the extension (within last 500ms - reduced for TikTok)
     // This prevents "ghost" play events from re-activating paused media
     const recentlyPaused = this.pausedStack.find(m =>
       m.tabId === tabId && m.frameId === frameId && m.mediaId === data.mediaId &&
-      !m.manuallyPaused && m.pausedAt && (Date.now() - m.pausedAt < 3000)
+      !m.manuallyPaused && m.pausedAt && (Date.now() - m.pausedAt < 500)
     );
 
     if (recentlyPaused) {
@@ -237,6 +259,16 @@ class MediaManager {
     }
 
     Logger.media('Play event', { title: data.title, url });
+
+    // Track this play event (per-media, not global)
+    this.recentPlayEvents.set(data.mediaId, now);
+
+    // Clean up old entries from recentPlayEvents (older than 3 seconds)
+    for (const [mediaId, timestamp] of this.recentPlayEvents.entries()) {
+      if (now - timestamp > 3000) {
+        this.recentPlayEvents.delete(mediaId);
+      }
+    }
 
     // Cancel any pending resume - new media is playing!
     this.cancelPendingResume();
@@ -268,44 +300,62 @@ class MediaManager {
     }
 
     // If there's already active media and it's not this one, pause it
+    // BUT: Don't pause if this is rapid scrolling on the same tab (TikTok case)
     if (this.activeMedia) {
-      Logger.info('New media started, pausing previous:', this.activeMedia.title);
+      const isSameTab = this.activeMedia.tabId === tabId;
+      const timeSinceActiveStart = this.activeMedia.startedAt ? (now - this.activeMedia.startedAt) : Infinity;
+      const isRapidScroll = isSameTab && timeSinceActiveStart < MEDIA_MANAGER_CONFIG.SCROLL_COOLDOWN;
 
-      // Pause the previously active media (browser or desktop)
-      await this.pauseActiveMedia();
+      if (isRapidScroll) {
+        // This is rapid scrolling on TikTok - don't pause, just switch active media
+        Logger.debug('Rapid scroll detected (same tab,', Math.round(timeSinceActiveStart), 'ms ago) - switching without pausing');
 
-      // Add to paused stack with manuallyPaused = FALSE, expired = FALSE, and timestamp
-      this.pausedStack = this.pausedStack.filter(m =>
-        !(m.tabId === this.activeMedia.tabId &&
-          m.frameId === this.activeMedia.frameId &&
-          m.mediaId === this.activeMedia.mediaId)
-      );
-      this.pausedStack.unshift({
-        ...this.activeMedia,
-        manuallyPaused: false,
-        expired: false,
-        pausedAt: Date.now()
-      });
+        // Just remove old media from paused stack if it's there
+        this.pausedStack = this.pausedStack.filter(m =>
+          !(m.tabId === this.activeMedia.tabId &&
+            m.frameId === this.activeMedia.frameId &&
+            m.mediaId === this.activeMedia.mediaId)
+        );
+      } else {
+        // Normal case: pause previous media
+        Logger.info('New media started, pausing previous:', this.activeMedia.title);
 
-      Logger.success('Added to paused stack (by extension):', this.activeMedia.title);
+        // Pause the previously active media (browser or desktop)
+        await this.pauseActiveMedia();
+
+        // Add to paused stack with manuallyPaused = FALSE, expired = FALSE, and timestamp
+        this.pausedStack = this.pausedStack.filter(m =>
+          !(m.tabId === this.activeMedia.tabId &&
+            m.frameId === this.activeMedia.frameId &&
+            m.mediaId === this.activeMedia.mediaId)
+        );
+        this.pausedStack.unshift({
+          ...this.activeMedia,
+          manuallyPaused: false,
+          expired: false,
+          pausedAt: Date.now()
+        });
+
+        Logger.success('Added to paused stack (by extension):', this.activeMedia.title);
+      }
     }
 
     // Remove from paused stack if it was there (it's now playing)
+    // Only remove the exact media that's playing, not all media from the same tab/frame
+    // This prevents removing valid paused media when scrolling creates new media
     const prevStackLength = this.pausedStack.length;
     this.pausedStack = this.pausedStack.filter(m => {
+      // Remove exact match only
       if (m.tabId === tabId && m.frameId === frameId && m.mediaId === data.mediaId) {
         return false;
       }
-      // Also clean up stale entries from same tab/frame
-      if (m.tabId === tabId && m.frameId === frameId && !this.isDesktopMedia(m)) {
-        Logger.debug('Cleaning up stale paused entry from same tab:', m.title);
-        return false;
-      }
+      // Don't remove other media from same tab/frame - they might be valid paused media
+      // TikTok creates many videos, but we should preserve the paused stack
       return true;
     });
 
     if (prevStackLength !== this.pausedStack.length) {
-      Logger.debug('Cleaned up', prevStackLength - this.pausedStack.length, 'entries from paused stack');
+      Logger.debug('Removed', prevStackLength - this.pausedStack.length, 'entry from paused stack');
     }
 
     // This is NEW media becoming active
@@ -624,6 +674,18 @@ class MediaManager {
     let step = 0;
 
     const fadeInterval = setInterval(async () => {
+      // Check if media still exists before continuing fade
+      const key = this.getMediaKey(tabId, frameId, mediaId);
+      if (!this.allMedia.has(key)) {
+        Logger.debug('Fade-in cancelled - media was cleaned up');
+        clearInterval(fadeInterval);
+        if (this.pendingResume) {
+          this.pendingResume.fadeInterval = null;
+          this.pendingResume = null;
+        }
+        return;
+      }
+
       step++;
       currentVolume = Math.min(1, startVolume + (volumeIncrement * step));
 
@@ -648,6 +710,18 @@ class MediaManager {
    * Set volume for a media element
    */
   async setMediaVolume(tabId, frameId, mediaId, volume) {
+    // Check if media still exists before trying to set volume
+    const key = this.getMediaKey(tabId, frameId, mediaId);
+    if (!this.allMedia.has(key)) {
+      Logger.debug('Skipping volume set - media no longer exists:', mediaId);
+      // Cancel any pending resume if this was the target
+      if (this.pendingResume?.media?.mediaId === mediaId) {
+        Logger.debug('Cancelling pending resume - media was cleaned up');
+        this.cancelPendingResume(false);
+      }
+      return;
+    }
+
     try {
       await browser.tabs.sendMessage(tabId, {
         type: AUTOSTOP.MSG.CONTROL,
@@ -658,6 +732,11 @@ class MediaManager {
       });
     } catch (e) {
       Logger.error('Failed to set volume:', e.message);
+      // If we can't reach the tab, the media is likely stale
+      if (e.message.includes('Could not establish connection') || e.message.includes('Receiving end does not exist')) {
+        Logger.debug('Media tab unreachable, cleaning up:', mediaId);
+        await this.handleMediaUnregistered(tabId, frameId, { mediaId });
+      }
     }
   }
 

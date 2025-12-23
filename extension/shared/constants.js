@@ -68,7 +68,7 @@ const AUTOSTOP = {
     fadeInDuration: 2000,     // ms for volume fade-in
     fadeInStartVolume: 0.2,   // Start volume (0-1) when fading in
     // Auto-expire: don't resume if new media played longer than this (0 = disabled)
-    autoExpireSeconds: 0,     // seconds (e.g., 120 = 2 min, 0 = always resume)
+    autoExpireSeconds: 60,    // seconds (e.g., 60 = 1 min, 0 = always resume)
     // Resume on manual pause: try to resume previous media when you manually pause current
     resumeOnManualPause: true // If false, manual pause = no auto-resume at all
   },
