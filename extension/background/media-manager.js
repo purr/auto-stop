@@ -323,7 +323,13 @@ class MediaManager {
         // Pause the previously active media (browser or desktop)
         await this.pauseActiveMedia();
 
-        // Add to paused stack with manuallyPaused = FALSE, expired = FALSE, and timestamp
+        let manuallyPaused = false;
+        if (this.isDesktopMedia(this.activeMedia) && this.desktopConnector) {
+          const ds = this.desktopConnector.getState();
+          const inPaused = ds.pausedList?.find(m => m.mediaId === this.activeMedia.mediaId);
+          if (inPaused && inPaused.manuallyPaused) manuallyPaused = true;
+        }
+
         this.pausedStack = this.pausedStack.filter(m =>
           !(m.tabId === this.activeMedia.tabId &&
             m.frameId === this.activeMedia.frameId &&
@@ -331,7 +337,7 @@ class MediaManager {
         );
         this.pausedStack.unshift({
           ...this.activeMedia,
-          manuallyPaused: false,
+          manuallyPaused,
           expired: false,
           pausedAt: Date.now()
         });
@@ -1115,6 +1121,11 @@ class MediaManager {
 
       // Schedule resume of previous media
       await this.scheduleResumePrevious(null, stoppedMedia, desktopMedia.manuallyPaused);
+    } else if (desktopMedia.manuallyPaused) {
+      const idx = this.pausedStack.findIndex(m => m.mediaId === desktopMedia.mediaId);
+      if (idx !== -1 && !this.pausedStack[idx].manuallyPaused) {
+        this.pausedStack[idx].manuallyPaused = true;
+      }
     }
 
     this.broadcastUpdate();

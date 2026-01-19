@@ -245,9 +245,12 @@ class DesktopConnector {
       }
     }
     // Desktop media stopped - debounce to avoid false triggers during transitions
+    // Use pausedList from the new state so manuallyPaused reflects how the desktop actually stopped
     else if (!newActive && prevActive) {
       Logger.debug('Desktop media stopped - debouncing...');
-      this.debouncedPause(prevActive);
+      const updated = state.pausedList?.find(m => m.mediaId === prevActive.mediaId);
+      const resolved = updated ? { ...prevActive, ...updated, isDesktop: true } : prevActive;
+      this.debouncedPause(resolved);
     }
 
     this.mediaManager.broadcastUpdate();

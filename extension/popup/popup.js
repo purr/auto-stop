@@ -27,6 +27,12 @@ class PopupController {
   }
 
   async init() {
+    const manifest = browser.runtime.getManifest();
+    const versionEl = document.getElementById('headerVersion');
+    if (versionEl && manifest?.version) {
+      versionEl.textContent = `v${manifest.version}`;
+    }
+
     // Get initial state from background
     await this.fetchState();
 

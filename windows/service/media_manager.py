@@ -701,6 +701,7 @@ class WindowsMediaManager:
                         # Keep fallback but mark as paused
                         old_info = self._media_info["desktop-spotify-fallback"]
                         old_info.is_playing = False
+                        old_info.manually_paused = True
                         logger.debug("Spotify paused (fallback)")
                         # Still broadcast update so extension knows it's paused
                         if self._on_state_change:
@@ -1174,6 +1175,7 @@ class WindowsMediaManager:
         for session_id, info in self._media_info.items():
             if info.is_playing and session_id != except_session_id:
                 if await self.pause(session_id):
+                    info.is_playing = False
                     paused_count += 1
 
         return paused_count
@@ -1186,13 +1188,24 @@ class WindowsMediaManager:
         if session_id == "desktop-spotify-fallback":
             logger.info(f"Handling Spotify fallback control: {action}")
             result = self._handle_spotify_control(action)
+            if result and session_id in self._media_info:
+                if action == ACTION.PLAY:
+                    self._media_info[session_id].is_playing = True
+                elif action == ACTION.PAUSE:
+                    self._media_info[session_id].is_playing = False
             logger.info(f"Spotify control result: {result}")
             return result
 
         if action == ACTION.PLAY:
-            return await self.play(session_id)
+            result = await self.play(session_id)
+            if result and session_id in self._media_info:
+                self._media_info[session_id].is_playing = True
+            return result
         elif action == ACTION.PAUSE:
-            return await self.pause(session_id)
+            result = await self.pause(session_id)
+            if result and session_id in self._media_info:
+                self._media_info[session_id].is_playing = False
+            return result
         elif action == ACTION.SKIP:
             return await self.next_track(session_id)
         elif action == ACTION.PREV:
