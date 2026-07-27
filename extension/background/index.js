@@ -69,10 +69,14 @@
     window.mediaManager.handleTabClosed(tabId);
   });
 
-  // Update favicon when tab updates
+  // React to tab updates
   browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     if (changeInfo.favIconUrl) {
       window.mediaManager.updateTabFavicon(tabId, changeInfo.favIconUrl);
+    }
+    // Tab muted/unmuted at the browser level (tab speaker icon).
+    if (changeInfo.mutedInfo) {
+      window.mediaManager.handleTabMutedChange(tabId, changeInfo.mutedInfo.muted);
     }
   });
 

@@ -232,6 +232,13 @@ class MediaManager {
       return;
     }
 
+    // Ignore media in a tab the user muted at the browser level (tab speaker icon).
+    // The element isn't muted, but the tab makes no sound, so it must not hold the audio slot.
+    if (tab?.mutedInfo?.muted) {
+      Logger.info('IGNORE play — tab is muted:', data.title || url);
+      return;
+    }
+
     // Check if this is just a heartbeat from already-active media FIRST
     const isSameMedia = this.activeMedia &&
                         this.activeMedia.tabId === tabId &&
@@ -887,6 +894,25 @@ class MediaManager {
       this.activeMedia.favicon = favicon;
     }
     this.broadcastUpdate();
+  }
+
+  /**
+   * A tab's browser-level mute state changed. A muted tab makes no sound, so if the
+   * active media lives in it, treat it as stopped and resume whatever was paused.
+   */
+  async handleTabMutedChange(tabId, muted) {
+    if (muted) {
+      if (this.activeMedia && !this.isDesktopMedia(this.activeMedia) && this.activeMedia.tabId === tabId) {
+        Logger.info('Active tab muted — treating as stopped, resuming previous:', this.activeMedia.title);
+        const stoppedMedia = { ...this.activeMedia };
+        this.activeMedia = null;
+        await this.scheduleResumePrevious(null, stoppedMedia);
+      }
+    } else {
+      // Unmuted: ask the tab to re-announce its playing media so it can reclaim the slot
+      // (it was only browser-silenced, never actually paused, so it won't self-report).
+      try { await browser.tabs.sendMessage(tabId, { type: 'PING' }); } catch (e) {}
+    }
   }
 
   /**

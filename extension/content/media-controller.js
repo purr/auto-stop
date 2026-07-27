@@ -396,16 +396,21 @@ class MediaController {
     }
   }
 
+  // Ping from the background. With a mediaId it verifies that specific media (stale check).
+  // With no mediaId ("re-announce" ping, e.g. after the tab is unmuted) it re-reports the
+  // current winner if it's still audibly playing, so the tab can reclaim the audio slot.
   handlePing(mediaId) {
     if (this.site?.detect) {
-      if (this.site.isPlaying()) this.send(AUTOSTOP.MSG.MEDIA_PLAY, this.siteMediaInfo(mediaId));
-      else this.send(AUTOSTOP.MSG.MEDIA_UNREGISTERED, { mediaId });
+      if (this.site.isPlaying()) this.send(AUTOSTOP.MSG.MEDIA_PLAY, this.siteMediaInfo(this.siteMediaId));
+      else if (mediaId) this.send(AUTOSTOP.MSG.MEDIA_UNREGISTERED, { mediaId });
       return;
     }
-    const el = this.getElement(mediaId);
+    const targetId = mediaId || this.winnerId;
+    if (!targetId) return;
+    const el = this.getElement(targetId);
     if (el && !el.paused && !el.ended && this.isAudible(el)) {
-      this.send(AUTOSTOP.MSG.MEDIA_PLAY, this.mediaInfo(el, mediaId));
-    } else {
+      this.send(AUTOSTOP.MSG.MEDIA_PLAY, this.mediaInfo(el, targetId));
+    } else if (mediaId) {
       this.send(AUTOSTOP.MSG.MEDIA_UNREGISTERED, { mediaId });
     }
   }
