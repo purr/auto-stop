@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 
 # Version - used for update checking
-VERSION = "1.3.2"
+VERSION = "1.3.3"
 
 # WebSocket server configuration
 WEBSOCKET_HOST = "127.0.0.1"

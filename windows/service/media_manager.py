@@ -767,15 +767,19 @@ class WindowsMediaManager:
             logger.debug(f"[TelegramVideo] state read error: {e}")
             return
 
-        # Defer to the real media-session path when Telegram/AyuGram is exposed there (songs
-        # register with SMTC; video does not). Never shadow a real session.
+        # Defer to the real media-session path only when a Telegram/AyuGram session is
+        # actually PLAYING there (a song). A stale/paused SMTC entry must NOT block video
+        # detection — AyuGram keeps a paused song's metadata around even while a video plays,
+        # which previously suppressed video detection entirely.
         TELEGRAM_NAMES = ("telegram", "ayugram", "64gram", "kotatogram")
-        in_smtc = any(
-            any(n in sid.lower() for n in TELEGRAM_NAMES) for sid in self._sessions
+        smtc_playing = any(
+            info.is_playing and any(n in sid.lower() for n in TELEGRAM_NAMES)
+            for sid, info in self._media_info.items()
+            if sid != session_id
         )
 
         now = datetime.now()
-        active = bool(state and state["active"]) and not in_smtc
+        active = bool(state and state["active"]) and not smtc_playing
 
         if active:
             if self._telegram_video_active_since is None:
