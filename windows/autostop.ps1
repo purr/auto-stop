@@ -251,16 +251,40 @@ function Invoke-Logs([bool]$Follow) {
     else { Get-Content $logFile -Tail 50 }
 }
 
+# Is the installed copy up to date? Verifies by hashing each installed service file against
+# the source (so it's true even if the version number wasn't bumped) — not just version.txt.
+function Get-UpdateStatus {
+    if (-not (Test-Path $ServiceDir))    { return @{ State = 'NotInstalled' } }
+    if (-not (Test-Path $SourceService)) { return @{ State = 'NoSource' } }
+    $installedVer = if (Test-Path $VersionFile) { (Get-Content $VersionFile -Raw).Trim() } else { '?' }
+    $differ = @()
+    foreach ($src in Get-ChildItem -Path $SourceService -Filter '*.py' -File) {
+        $dst = Join-Path $ServiceDir $src.Name
+        if (-not (Test-Path $dst)) { $differ += $src.Name; continue }
+        if ((Get-FileHash $src.FullName).Hash -ne (Get-FileHash $dst).Hash) { $differ += $src.Name }
+    }
+    if ($differ.Count -gt 0) { return @{ State = 'UpdateAvailable'; Installed = $installedVer; Source = $Version; Changed = ($differ -join ', ') } }
+    return @{ State = 'UpToDate'; Installed = $installedVer; Source = $Version }
+}
+
 function Show-Status {
     $installed = Test-Path $ServiceDir
     $task      = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
     $running   = Test-PortListening
     $instVer   = if (Test-Path $VersionFile) { (Get-Content $VersionFile -Raw).Trim() } else { "none" }
+    $upd       = Get-UpdateStatus
     Write-Host ""
     Write-Host "  Installed  : $(if ($installed) { "yes (v$instVer)" } else { 'no' })"          -ForegroundColor $(if ($installed) { 'Green' } else { 'Yellow' })
     Write-Host "  Auto-start : $(if ($task) { $task.State } else { 'not configured' })"          -ForegroundColor Gray
     Write-Host "  Running    : $(if ($running) { "yes (port $Port)" } else { 'no' })"            -ForegroundColor $(if ($running) { 'Green' } else { 'Yellow' })
     Write-Host "  Source ver : v$Version"                                                        -ForegroundColor Gray
+    switch ($upd.State) {
+        'UpToDate'        { Write-Host "  Update     : up to date (files match source)"          -ForegroundColor Green }
+        'UpdateAvailable' { Write-Host "  Update     : UPDATE AVAILABLE  v$($upd.Installed) -> v$($upd.Source)" -ForegroundColor Cyan
+                            Write-Host "               (changed: $($upd.Changed))  -  use option 2" -ForegroundColor DarkCyan }
+        'NotInstalled'    { Write-Host "  Update     : not installed yet"                        -ForegroundColor Yellow }
+        'NoSource'        { Write-Host "  Update     : source 'service' folder not found"        -ForegroundColor Yellow }
+    }
 }
 
 # ============================================================================
