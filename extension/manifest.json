@@ -1,0 +1,60 @@
+{
+  "manifest_version": 2,
+  "name": "Auto-Stop Media",
+  "version": "2.3.4",
+  "description": "Automatically pause media in other tabs and desktop apps when new media starts playing. Only one media plays at a time.",
+  "author": "Auto-Stop Media",
+
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "{a8f133d7-f5a5-4041-9fa0-56b1eeaa844e}",
+      "strict_min_version": "142.0",
+      "data_collection_permissions": {
+        "required": ["none"]
+      }
+    }
+  },
+
+  "permissions": [
+    "tabs",
+    "activeTab",
+    "storage",
+    "<all_urls>"
+  ],
+
+  "background": {
+    "scripts": [
+      "shared/constants.js",
+      "background/storage.js",
+      "background/desktop-connector.js",
+      "background/media-manager.js",
+      "background/index.js"
+    ],
+    "persistent": true
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": [
+        "shared/constants.js",
+        "content/media-controller.js",
+        "content/index.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ],
+
+  "browser_action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": "icons/icon-idle.svg",
+    "default_title": "Auto-Stop Media - No media playing"
+  },
+
+  "icons": {
+    "48": "icons/icon-idle.svg",
+    "96": "icons/icon-idle.svg"
+  }
+}
+

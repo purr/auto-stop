@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Auto-Stop Media</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-title">
+        <svg class="logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <polygon points="10,8 16,12 10,16" fill="currentColor" stroke="none"/>
+        </svg>
+        <div class="header-title-text">
+          <h1>Auto-Stop</h1>
+          <span class="header-version" id="headerVersion"></span>
+        </div>
+      </div>
+      <button class="settings-btn" id="settingsBtn" title="Settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </button>
+    </header>
+
+    <!-- Settings Panel (hidden by default) -->
+    <section class="settings-panel" id="settingsPanel">
+      <div class="setting-group">
+        <div class="setting-header">
+          <span class="setting-label">Resume Effects</span>
+          <span class="setting-hint">How resumed media starts</span>
+        </div>
+
+        <div class="setting-row">
+          <label for="resumeDelay">Resume Delay</label>
+          <div class="input-with-unit">
+            <input type="number" id="resumeDelay" min="0" max="10000" step="100" value="1500">
+            <span>ms</span>
+          </div>
+        </div>
+        <div class="setting-micro-hint">Wait before resuming (prevents accidental playback during loading)</div>
+
+        <div class="setting-row">
+          <label for="fadeInDuration">Fade-in Duration</label>
+          <div class="input-with-unit">
+            <input type="number" id="fadeInDuration" min="0" max="10000" step="100" value="2000">
+            <span>ms</span>
+          </div>
+        </div>
+        <div class="setting-micro-hint">How long to gradually increase volume (0 = instant)</div>
+
+        <div class="setting-row">
+          <label for="fadeInStartVolume">Start Volume</label>
+          <div class="input-with-unit">
+            <input type="number" id="fadeInStartVolume" min="0" max="100" step="5" value="20">
+            <span>%</span>
+          </div>
+        </div>
+        <div class="setting-micro-hint">Initial volume when fading in</div>
+      </div>
+
+      <div class="setting-group">
+        <div class="setting-header">
+          <span class="setting-label">Auto-Resume Rules</span>
+          <span class="setting-hint">When to automatically resume paused media</span>
+        </div>
+
+        <div class="setting-row checkbox-row">
+          <label for="resumeOnManualPause">Resume on manual pause</label>
+          <input type="checkbox" id="resumeOnManualPause" checked>
+        </div>
+        <div class="setting-micro-hint">When you manually pause, resume previous media</div>
+
+        <div class="setting-row">
+          <label for="autoExpireSeconds">Auto-Expire</label>
+          <div class="input-with-unit">
+            <input type="number" id="autoExpireSeconds" min="0" max="1000" step="1" value="0">
+            <span>sec</span>
+          </div>
+        </div>
+        <div class="setting-micro-hint">Don't auto-resume if new media played longer than this (0 = disabled)</div>
+      </div>
+
+      <div class="setting-group">
+        <div class="setting-header">
+          <span class="setting-label">Blacklist</span>
+          <span class="setting-hint">Sites to ignore (wildcards supported: *.example.com)</span>
+        </div>
+        <div class="Blacklist-container">
+          <div class="Blacklist-input-row">
+            <input type="text" id="BlacklistInput" placeholder="example.com" class="Blacklist-input">
+            <button class="add-btn" id="addBlacklistBtn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19"/>
+                <line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+            </button>
+          </div>
+          <div class="Blacklist-expand-header" id="BlacklistExpandHeader">
+            <svg class="expand-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+            <span class="expand-label">Domains</span>
+            <span class="expand-count" id="BlacklistCount">0</span>
+          </div>
+          <div class="Blacklist-expand-content" id="BlacklistExpandContent">
+            <ul class="Blacklist-items" id="BlacklistItems">
+              <!-- Dynamically populated -->
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Now Playing -->
+    <section class="now-playing" id="nowPlaying">
+      <div class="section-header">
+        <span class="section-dot active" id="nowPlayingDot"></span>
+        <span id="nowPlayingLabel">Now Playing</span>
+      </div>
+      <div class="media-card active" id="activeMediaCard">
+        <!-- Left: Cover with favicon overlay -->
+        <div class="media-cover-container">
+          <div class="media-cover" id="activeCover">
+            <svg class="cover-placeholder" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+            </svg>
+          </div>
+          <img class="favicon-overlay" id="activeFavicon" src="" alt="">
+          <div class="media-type-badge" id="activeTypeBadge">VIDEO</div>
+        </div>
+
+        <!-- Right: Info stacked vertically -->
+        <div class="media-info">
+          <!-- Title -->
+          <div class="media-title" id="activeTitle">No media playing</div>
+          <div class="media-source" id="activeSource"></div>
+
+          <!-- Progress -->
+          <div class="media-progress">
+            <span class="progress-time-current" id="activeCurrentTime">0:00</span>
+            <div class="progress-bar">
+              <div class="progress-fill" id="activeProgress"></div>
+            </div>
+            <span class="progress-time-duration" id="activeDuration">0:00</span>
+          </div>
+
+          <!-- Controls: prev, play/pause, next -->
+          <div class="media-controls">
+            <button class="control-btn" id="activePrevBtn" title="Previous">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <rect x="5" y="4" width="4" height="16" rx="1"/>
+                <polygon points="19,20 9,12 19,4"/>
+              </svg>
+            </button>
+            <button class="control-btn control-btn-main" id="activePlayPauseBtn" title="Play/Pause">
+              <svg class="icon-pause" viewBox="0 0 24 24" fill="currentColor">
+                <rect x="6" y="4" width="4" height="16" rx="1"/>
+                <rect x="14" y="4" width="4" height="16" rx="1"/>
+              </svg>
+              <svg class="icon-play hidden" viewBox="0 0 24 24" fill="currentColor">
+                <polygon points="5,3 19,12 5,21"/>
+              </svg>
+            </button>
+            <button class="control-btn" id="activeSkipBtn" title="Next">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <polygon points="5,4 15,12 5,20"/>
+                <rect x="15" y="4" width="4" height="16" rx="1"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="empty-state" id="emptyNowPlaying">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="12" cy="12" r="10"/>
+          <polygon points="10,8 16,12 10,16"/>
+        </svg>
+        <span>No media playing</span>
+      </div>
+    </section>
+
+    <!-- Paused Media Stack -->
+    <section class="paused-stack" id="pausedStack">
+      <div class="section-header">
+        <span class="section-dot paused"></span>
+        <span>Paused</span>
+        <span class="count" id="pausedCount">0</span>
+      </div>
+      <div class="media-list-wrapper" id="pausedListWrapper">
+        <div class="media-list" id="pausedList">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+      <div class="empty-state small" id="emptyPaused">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="6" y="4" width="4" height="16" rx="1"/>
+          <rect x="14" y="4" width="4" height="16" rx="1"/>
+        </svg>
+        <span>No paused media</span>
+      </div>
+    </section>
+
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
+

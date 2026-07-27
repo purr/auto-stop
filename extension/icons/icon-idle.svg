@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bgGradIdle" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#26233a"/>
+      <stop offset="100%" style="stop-color:#191724"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background circle (muted/inactive) -->
+  <circle cx="64" cy="64" r="58" fill="url(#bgGradIdle)" stroke="#6e6a86" stroke-width="4"/>
+
+  <!-- PLAY symbol (triangle) - shows when NO media is playing -->
+  <polygon points="48,36 48,92 96,64" fill="#6e6a86"/>
+</svg>

@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bgGradActive" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#26233a"/>
+      <stop offset="100%" style="stop-color:#191724"/>
+    </linearGradient>
+    <linearGradient id="accentGradActive" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#eb6f92"/>
+      <stop offset="100%" style="stop-color:#c4a7e7"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background circle with active glow -->
+  <circle cx="64" cy="64" r="58" fill="url(#bgGradActive)" stroke="#eb6f92" stroke-width="6"/>
+
+  <!-- Sound waves (indicating audio is playing) -->
+  <g fill="none" stroke="#eb6f92" stroke-width="4" stroke-linecap="round">
+    <path d="M30 52 Q22 64 30 76" opacity="0.5"/>
+    <path d="M20 42 Q8 64 20 86" opacity="0.3"/>
+    <path d="M98 52 Q106 64 98 76" opacity="0.5"/>
+    <path d="M108 42 Q120 64 108 86" opacity="0.3"/>
+  </g>
+
+  <!-- PAUSE symbol (two bars) - shows when media is PLAYING -->
+  <rect x="44" y="38" width="14" height="52" rx="4" fill="url(#accentGradActive)"/>
+  <rect x="70" y="38" width="14" height="52" rx="4" fill="url(#accentGradActive)"/>
+</svg>

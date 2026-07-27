@@ -1,0 +1,115 @@
+name: Build and Sign Firefox Extension
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'extension/manifest.json'
+
+permissions:
+  contents: write
+
+# REQUIRED SECRETS (add in GitHub repo Settings → Secrets and variables → Actions):
+# - AMO_JWT_ISSUER: Get from https://addons.mozilla.org/developers/addon/api/key/
+# - AMO_JWT_SECRET: Get from https://addons.mozilla.org/developers/addon/api/key/
+
+jobs:
+  build-and-sign:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check if version was bumped
+        id: version_check
+        run: |
+          # Get current version
+          CURRENT_VERSION=$(jq -r '.version' extension/manifest.json)
+          echo "Current version: $CURRENT_VERSION"
+
+          # Get previous version (from previous commit)
+          git show HEAD~1:extension/manifest.json > /tmp/old_manifest.json 2>/dev/null || echo '{"version":"0.0.0"}' > /tmp/old_manifest.json
+          PREVIOUS_VERSION=$(jq -r '.version' /tmp/old_manifest.json)
+          echo "Previous version: $PREVIOUS_VERSION"
+
+          # Check if version changed OR if manually triggered
+          if [ "$CURRENT_VERSION" != "$PREVIOUS_VERSION" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "✅ Building version $CURRENT_VERSION"
+            echo "should_build=true" >> $GITHUB_OUTPUT
+            echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "⏭️ Version unchanged ($CURRENT_VERSION), skipping build"
+            echo "should_build=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check secrets are configured
+        if: steps.version_check.outputs.should_build == 'true'
+        run: |
+          if [ -z "${{ secrets.AMO_JWT_ISSUER }}" ] || [ -z "${{ secrets.AMO_JWT_SECRET }}" ]; then
+            echo "❌ ERROR: Missing required secrets!"
+            echo ""
+            echo "Go to your GitHub repository:"
+            echo "  Settings → Secrets and variables → Actions → New repository secret"
+            echo ""
+            echo "Add these two secrets:"
+            echo "  1. AMO_JWT_ISSUER"
+            echo "  2. AMO_JWT_SECRET"
+            echo ""
+            echo "Get your API keys from: https://addons.mozilla.org/developers/addon/api/key/"
+            exit 1
+          fi
+          echo "✅ Secrets configured"
+
+      - name: Setup Node.js
+        if: steps.version_check.outputs.should_build == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install web-ext
+        if: steps.version_check.outputs.should_build == 'true'
+        run: npm install -g web-ext
+
+      - name: Lint extension
+        if: steps.version_check.outputs.should_build == 'true'
+        run: web-ext lint --source-dir=extension --warnings-as-errors=false
+
+      - name: Sign extension with Mozilla
+        if: steps.version_check.outputs.should_build == 'true'
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
+          WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          echo "🔐 Signing extension with Mozilla..."
+          web-ext sign \
+            --source-dir=extension \
+            --artifacts-dir=./signed \
+            --channel=unlisted
+
+          echo ""
+          echo "✅ Signed extension files:"
+          ls -la signed/
+
+      - name: Create Release
+        if: steps.version_check.outputs.should_build == 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.version_check.outputs.version }}
+          name: v${{ steps.version_check.outputs.version }}
+          files: signed/*.xpi
+          body: |
+            ## Installation
+
+            1. Download the `.xpi` file below
+            2. Open Firefox and drag the file into the browser
+            3. Click "Add" when prompted
+
+            ✅ This extension is **signed** and works in regular Firefox!
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

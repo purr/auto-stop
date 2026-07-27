@@ -1,0 +1,35 @@
+# Auto-Stop Media Extension - Cursor Rules
+
+## Version Bumping
+When making changes to extension code (any file in `extension/`), always bump the version in `extension/manifest.json`:
+- For bug fixes: bump patch version (e.g., 1.1.5 → 1.1.6)
+- For new features: bump minor version (e.g., 1.1.5 → 1.2.0)
+- For breaking changes: bump major version (e.g., 1.1.5 → 2.0.0)
+
+The version field is located at the top of `extension/manifest.json`.
+
+## Code Style
+- Use ES6+ JavaScript features
+- Follow existing code patterns and naming conventions
+- Comment only non-obvious "why", not "what"
+- Use the Logger utility for debug/info/error messages
+
+## Firefox Extension Specifics
+- This is a Manifest V2 Firefox extension
+- Use `browser.*` APIs (not `chrome.*`)
+- Test changes by loading as temporary add-on in `about:debugging`
+
+## File Structure
+- `extension/background/` - Background scripts (media-manager, desktop-connector, storage)
+- `extension/content/` - Content scripts: `media-controller.js` (universal detector) + `index.js`
+- `extension/popup/` - Extension popup UI (HTML, CSS, JS)
+- `extension/shared/` - Shared constants and Logger
+- `extension/icons/` - Extension icons
+
+## Detection Model (content)
+- One universal `MediaController`, no per-site adapters.
+- Detect media via capture-phase document listeners (play/pause/volumechange/ended).
+- The "active" media is the one that is audible (`playing && !muted && volume > 0`).
+  Muted media is ignored. Visibility is only a tiebreak for multiple audible elements.
+- Site-specific handling goes in the `SITE_CONTROLLERS` data table, not new files.
+  Use `detect: true` only for sites whose player isn't a visible DOM media element (e.g. SoundCloud).

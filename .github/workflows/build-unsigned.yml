@@ -1,0 +1,60 @@
+name: Build Unsigned Extension
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install web-ext
+        run: npm install -g web-ext
+
+      - name: Get version from manifest
+        id: get_version
+        run: |
+          VERSION=$(jq -r '.version' extension/manifest.json)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "📦 Building version: $VERSION"
+
+      - name: Lint extension
+        run: web-ext lint --source-dir=extension --warnings-as-errors=false
+
+      - name: Build XPI
+        run: |
+          mkdir -p build
+          cd extension
+          zip -r ../build/auto_stop_media-${{ steps.get_version.outputs.version }}.xpi . -x "*.git*"
+          cd ..
+          echo "✅ Built extension:"
+          ls -la build/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.get_version.outputs.version }}-unsigned
+          name: v${{ steps.get_version.outputs.version }} (Unsigned)
+          files: build/*.xpi
+          body: |
+            ## ⚠️ Unsigned Build
+
+            This is an **unsigned** extension. It can only be installed in:
+            - Firefox Developer Edition
+            - Firefox Nightly
+
+            Set `xpinstall.signatures.required` to `false` in `about:config` first.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
