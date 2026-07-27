@@ -233,8 +233,14 @@ class MediaManager {
     }
 
     // Ignore media in a tab the user muted at the browser level (tab speaker icon).
-    // The element isn't muted, but the tab makes no sound, so it must not hold the audio slot.
-    if (tab?.mutedInfo?.muted) {
+    // The element isn't muted, but the tab makes no sound, so it must not hold the audio
+    // slot. Query the tab live — sender.tab.mutedInfo is often stale or absent.
+    let tabMuted = tab?.mutedInfo?.muted === true;
+    try {
+      const liveTab = await browser.tabs.get(tabId);
+      tabMuted = liveTab?.mutedInfo?.muted === true;
+    } catch (e) {}
+    if (tabMuted) {
       Logger.info('IGNORE play — tab is muted:', data.title || url);
       return;
     }
