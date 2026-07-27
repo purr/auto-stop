@@ -12,49 +12,37 @@ No Visual Studio or build tools required - all dependencies have prebuilt wheels
 
 ## Installation
 
-### Quick Install
+### One script, interactive menu
 
-1. Open PowerShell as your normal user (not Admin)
-2. Navigate to this folder:
+Everything is driven by a single script — no arguments to remember:
+
+1. Navigate to this folder:
    ```powershell
    cd path\to\auto-stop\windows
    ```
-3. Run the installer:
+2. Run it:
    ```powershell
-   .\install.ps1
+   .\autostop.ps1
    ```
 
-The installer will:
-- Check Python version and prerequisites
-- Create installation directory at `%APPDATA%\AutoStopMedia`
-- Install Python dependencies (`websockets`, `winsdk`)
-- Create a scheduled task to start the service at login
-- Start the service immediately
+It shows a menu — pick a number:
 
-### Installation Options
-
-```powershell
-# Force update/reinstall (upgrade, downgrade, or reinstall same version)
-.\install.ps1 -Force
-
-# Install but don't start the service yet
-.\install.ps1 -NoStart
+```
+ 1) Install / Reinstall
+ 2) Update files + restart (fast)
+ 3) Restart service
+ 4) Stop service
+ 5) View logs (last 50)
+ 6) Follow logs (live)
+ 7) Uninstall
+ 0) Exit
 ```
 
-## Uninstallation
-
-```powershell
-.\uninstall.ps1
-```
-
-Options:
-```powershell
-# Keep log files
-.\uninstall.ps1 -KeepLogs
-
-# Only remove scheduled task (keep all files)
-.\uninstall.ps1 -KeepConfig
-```
+The script elevates itself once at launch (a UAC prompt) because creating the
+auto-start task needs admin. **Install** checks prerequisites, installs Python
+dependencies, creates the logon auto-start task, and starts the service.
+**Update** is the fast path after editing service files (copy + restart).
+**Uninstall** stops the service, removes the task, and deletes the files.
 
 ## How It Works
 

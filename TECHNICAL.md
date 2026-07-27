@@ -79,11 +79,7 @@ auto-stop/
 │       └── icon-idle.svg         # Play icon (▶) - shown when no media playing
 │
 ├── windows/                      # Windows background service
-│   ├── install.ps1               # PowerShell installer (checks prereqs, creates task)
-│   ├── uninstall.ps1             # PowerShell uninstaller
-│   ├── restart.ps1               # Restart service script
-│   ├── stop.ps1                  # Stop service script
-│   ├── logs.ps1                  # View logs script
+│   ├── autostop.ps1              # One script, interactive menu: install/update/restart/stop/uninstall/logs
 │   ├── requirements.txt          # Python dependencies
 │   ├── README.md                 # Windows-specific documentation
 │   └── service/
@@ -266,14 +262,18 @@ workaround.
 
 ### Service Management
 
-**Using PowerShell scripts:**
+**One PowerShell script** (`autostop.ps1`) — no arguments; run it for an interactive menu:
 ```powershell
-.\install.ps1      # Install service
-.\uninstall.ps1    # Remove service
-.\restart.ps1      # Restart service
-.\stop.ps1         # Stop service
-.\logs.ps1          # View logs
+.\autostop.ps1
 ```
+It elevates once at launch (UAC) and shows a numbered menu:
+```
+ 1) Install / Reinstall      5) View logs (last 50)
+ 2) Update files + restart    6) Follow logs (live)
+ 3) Restart service           7) Uninstall
+ 4) Stop service              0) Exit
+```
+"Update files + restart" is the fast dev loop after editing service files.
 
 **Using Task Scheduler:**
 - Task name: `AutoStopMediaService`
@@ -401,7 +401,7 @@ python main.py
 
 **Windows Service:**
 - Logs: `%APPDATA%\AutoStopMedia\logs\service.log`
-- View logs: `.\logs.ps1` or `Get-Content "$env:APPDATA\AutoStopMedia\logs\service.log" -Tail 50 -Wait`
+- View logs: `.\autostop.ps1` or `Get-Content "$env:APPDATA\AutoStopMedia\logs\service.log" -Tail 50 -Wait`
 
 ### Testing
 

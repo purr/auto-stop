@@ -46,7 +46,7 @@ To control desktop apps like Spotify and VLC from the browser:
 
 1. Open PowerShell
 2. Navigate to the `windows` folder in this project
-3. Run: `.\install.ps1`
+3. Run: `.\autostop.ps1`
 
 The installer will:
 - Check that Python is installed
@@ -123,7 +123,7 @@ When the Windows service is running and connected, you'll see "Desktop" in the p
 - If missing, the service may not be installed or running
 
 **To restart the service:**
-- Run `.\restart.ps1` from the `windows` folder
+- Run `.\autostop.ps1` from the `windows` folder
 - Or use Task Scheduler (search "Task Scheduler" in Windows)
 
 ## ❓ Common Questions
@@ -141,7 +141,7 @@ A: Most sites with standard HTML5 audio/video work automatically. If a site uses
 A: Yes! In settings, set "Resume on Manual Pause" to off, and set "Auto-Expire" to 0.
 
 **Q: How do I uninstall?**
-A: For the extension: Right-click the icon → Remove Extension. For the Windows service: Run `.\uninstall.ps1` from the `windows` folder.
+A: For the extension: Right-click the icon → Remove Extension. For the Windows service: Run `.\autostop.ps1` from the `windows` folder.
 
 ## 📖 Need More Information?
 
